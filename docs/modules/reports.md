@@ -103,6 +103,8 @@ CLIMS does not record what hotspots hand out, so consumption is read from demand
 - The summary adds `by_district` at the hotspot level, a `monthly` trend of requests and pieces received, and `field_sync` at the hotspot level. `GET /api/v1/reports/consumption/records` lists the rows, most requests first, and `GET /api/v1/reports/export/consumption?level=` exports them.
 - MOH sees every district and warehouse, a district its own hotspots and orders, and a warehouse the orders placed with it.
 
+On the web, **Reports → Consumption** (`/moh/reports`, `/dcfp/reports`, `/warehouse/reports`, needs `reports:read`) shows it with a tab per level (MOH: Hotspots, Districts and Warehouses; a DCFP: Hotspots; NMS and JMS: Districts and Warehouses), the period, district and warehouse filters, the type requested and sent and the product, headline figures, monthly charts, and the rows with a search that runs on the server and CSV and Excel downloads.
+
 ## Store stock
 
 `GET /api/v1/reports/stock` is a current, dated view of stock at warehouses and district stores, separate from any reporting period (`stock_date`). Each line is a store, product and unit:

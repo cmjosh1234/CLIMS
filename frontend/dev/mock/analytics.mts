@@ -804,6 +804,255 @@ function hmisReport(query: URLSearchParams) {
 }
 
 /** A report's export table, as `/reports/export/{report}` returns it. */
+/**
+ * `GET /reports/consumption`, `/records` and the export: a small sample at each level, so the
+ * Consumption page reads as the Go API answers it.
+ */
+const CONSUMPTION_HOTSPOTS = [
+  {
+    name: 'Owino Market',
+    district: 'Kampala',
+    subcounty: 'Central',
+    requests: 4,
+    messages: 7,
+    rejected: 0,
+    average_days_between: 6.5,
+    delivered: [1200, 400],
+    received: [1150, 400],
+  },
+  {
+    name: 'Kisenyi Landing',
+    district: 'Kampala',
+    subcounty: 'Central',
+    requests: 2,
+    messages: 2,
+    rejected: 1,
+    average_days_between: 11,
+    delivered: [600, 0],
+    received: [600, 0],
+  },
+  {
+    name: 'Nansana Stage',
+    district: 'Wakiso',
+    subcounty: 'Nansana Division',
+    requests: 1,
+    messages: 3,
+    rejected: 0,
+    average_days_between: null,
+    delivered: [300, 100],
+    received: [0, 0],
+  },
+];
+const CONSUMPTION_ORDERS = [
+  {
+    name: 'Kampala',
+    orders: 3,
+    rejected: 0,
+    average_days_between: 9,
+    issued: [6000, 400],
+    received: [6000, 400],
+  },
+  {
+    name: 'Wakiso',
+    orders: 2,
+    rejected: 1,
+    average_days_between: 15,
+    issued: [3000, 0],
+    received: [2880, 0],
+  },
+];
+
+function consumptionLevel(query: URLSearchParams): 'hotspot' | 'district' | 'warehouse' {
+  const level = query.get('level');
+  return level === 'district' || level === 'warehouse' ? level : 'hotspot';
+}
+
+function consumptionRows(query: URLSearchParams) {
+  const level = consumptionLevel(query);
+  const q = (query.get('q') ?? '').toLowerCase();
+  if (level === 'hotspot') {
+    return CONSUMPTION_HOTSPOTS.filter((row) => row.name.toLowerCase().includes(q)).map(
+      (row, n) => ({
+        id: `00000000-0000-4000-8800-00000000000${String(n + 1)}`,
+        name: row.name,
+        district_id: null,
+        district: row.district,
+        subcounty: row.subcounty,
+        last_requested_at: iso(Date.now() - (n + 1) * 86_400_000),
+        requests: row.requests,
+        messages: row.messages,
+        rejected: row.rejected,
+        average_days_between: row.average_days_between,
+        delivered_male_pieces: row.delivered[0],
+        delivered_female_pieces: row.delivered[1],
+        received_male_pieces: row.received[0],
+        received_female_pieces: row.received[1],
+      }),
+    );
+  }
+  const rows =
+    level === 'warehouse'
+      ? [
+          {
+            name: 'National Medical Stores',
+            orders: 5,
+            rejected: 0,
+            average_days_between: 6,
+            issued: [9000, 400],
+            received: [8880, 400],
+          },
+        ]
+      : CONSUMPTION_ORDERS;
+  return rows
+    .filter((row) => row.name.toLowerCase().includes(q))
+    .map((row, n) => ({
+      id: `00000000-0000-4000-8810-00000000000${String(n + 1)}`,
+      name: row.name,
+      district_id: null,
+      last_ordered_at: iso(Date.now() - (n + 2) * 86_400_000),
+      orders: row.orders,
+      rejected: row.rejected,
+      average_days_between: row.average_days_between,
+      requested_male_pieces: row.issued[0],
+      requested_female_pieces: row.issued[1],
+      approved_male_pieces: row.issued[0],
+      approved_female_pieces: row.issued[1],
+      issued_male_pieces: row.issued[0],
+      issued_female_pieces: row.issued[1],
+      received_male_pieces: row.received[0],
+      received_female_pieces: row.received[1],
+      unconverted: 0,
+      dispatches_without_order: level === 'warehouse' ? 1 : null,
+      pieces_without_order: level === 'warehouse' ? 1200 : null,
+    }));
+}
+
+function consumptionSummary(query: URLSearchParams) {
+  const level = consumptionLevel(query);
+  const f = readFilter(query, 0);
+  const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
+  const pieces = (male: number, female: number) => ({ male, female });
+  const base = {
+    level,
+    period: period(f),
+    date_basis:
+      'Requests raised in the period, in Africa/Kampala, with everything delivered against them up to the data update time.',
+    data_updated_at: iso(Date.now()),
+    monthly: [
+      { month: period(f).from.slice(0, 7), requests: 4, received_pieces: pieces(900, 200) },
+      { month: period(f).to.slice(0, 7), requests: 3, received_pieces: pieces(850, 200) },
+    ],
+  };
+  if (level === 'hotspot') {
+    const h = CONSUMPTION_HOTSPOTS;
+    return {
+      ...base,
+      hotspots: {
+        requests: sum(h.map((row) => row.requests)),
+        messages: sum(h.map((row) => row.messages)),
+        rejected: sum(h.map((row) => row.rejected)),
+        average_days_between: 8.75,
+        delivered_pieces: pieces(
+          sum(h.map((row) => row.delivered[0] ?? 0)),
+          sum(h.map((row) => row.delivered[1] ?? 0)),
+        ),
+        received_pieces: pieces(
+          sum(h.map((row) => row.received[0] ?? 0)),
+          sum(h.map((row) => row.received[1] ?? 0)),
+        ),
+        hotspots_requesting: h.length,
+        silent_hotspots: 12,
+      },
+      by_district: ['Kampala', 'Wakiso'].map((district) => {
+        const rows = h.filter((row) => row.district === district);
+        return {
+          district_id: null,
+          district,
+          requests: sum(rows.map((row) => row.requests)),
+          messages: sum(rows.map((row) => row.messages)),
+          rejected: sum(rows.map((row) => row.rejected)),
+          average_days_between: null,
+          delivered_pieces: pieces(
+            sum(rows.map((row) => row.delivered[0] ?? 0)),
+            sum(rows.map((row) => row.delivered[1] ?? 0)),
+          ),
+          received_pieces: pieces(
+            sum(rows.map((row) => row.received[0] ?? 0)),
+            sum(rows.map((row) => row.received[1] ?? 0)),
+          ),
+          hotspots_requesting: rows.length,
+        };
+      }),
+    };
+  }
+  const o = CONSUMPTION_ORDERS;
+  const issued = pieces(
+    sum(o.map((row) => row.issued[0] ?? 0)),
+    sum(o.map((row) => row.issued[1] ?? 0)),
+  );
+  return {
+    ...base,
+    orders: {
+      orders: sum(o.map((row) => row.orders)),
+      rejected: sum(o.map((row) => row.rejected)),
+      average_days_between: 12,
+      requested_pieces: issued,
+      approved_pieces: issued,
+      issued_pieces: issued,
+      received_pieces: pieces(
+        sum(o.map((row) => row.received[0] ?? 0)),
+        sum(o.map((row) => row.received[1] ?? 0)),
+      ),
+      unconverted: 0,
+    },
+    ...(level === 'warehouse'
+      ? {
+          dispatches_without_order: {
+            dispatches: 1,
+            issued_pieces: 1200,
+            received_pieces: 1200,
+            awaiting_receipt: 0,
+          },
+        }
+      : {}),
+  };
+}
+
+function consumptionTable(query: URLSearchParams) {
+  const level = consumptionLevel(query);
+  const rows = consumptionRows(query);
+  const f = readFilter(query, 0);
+  return {
+    report: 'consumption',
+    title:
+      level === 'hotspot'
+        ? 'Consumption by hotspot'
+        : level === 'district'
+          ? 'Consumption by district'
+          : 'Supply by warehouse',
+    period: `${period(f).from} to ${period(f).to}`,
+    data_updated_at: iso(Date.now()),
+    scope: 'National',
+    product: 'Male and female condoms',
+    rule_version: 'reporting-requirements-0.2-draft',
+    filters: { level },
+    definitions: [],
+    columns: [
+      {
+        key: 'name',
+        header: level === 'hotspot' ? 'Hotspot' : level === 'district' ? 'District' : 'Warehouse',
+      },
+      {
+        key: level === 'hotspot' ? 'requests' : 'orders',
+        header: level === 'hotspot' ? 'Requests' : 'Orders',
+      },
+      { key: 'received_male_pieces', header: 'Male pieces received' },
+      { key: 'received_female_pieces', header: 'Female pieces received' },
+    ],
+    rows,
+  };
+}
+
 function exportTable(report: string, query: URLSearchParams) {
   const f = readFilter(query, report === 'notifications' ? 0 : 0);
   const meta = {
@@ -942,6 +1191,8 @@ export function handleAnalytics(
       return hmisReport(query);
     case 'trends':
       return trendReport(query);
+    case 'consumption':
+      return sub === 'records' ? ok(consumptionRows(query)) : ok(consumptionSummary(query));
     case 'hotspots':
       return hotspotReport(query);
     case 'settings':
@@ -958,6 +1209,7 @@ export function handleAnalytics(
       });
     case 'export': {
       if (!sub) return fail(404, 'Not found');
+      if (sub === 'consumption') return ok(consumptionTable(query));
       const table = exportTable(sub, query);
       if (query.get('format') !== 'csv' || table.status !== 200) return table;
       // The CSV the server sends: its information lines, then the headers and rows.

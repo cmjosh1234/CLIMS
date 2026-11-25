@@ -1,8 +1,8 @@
-import ReporterReportsPage from '@/features/reports/ReporterReportsPage';
+import ConsumptionPage from '@/features/consumption/ConsumptionPage';
 import { pageMetadata } from '@/navigation/pageMetadata';
 
 export const metadata = pageMetadata('/dcfp/reports');
 
 export default function Page() {
-  return <ReporterReportsPage workspace="dcfp" level="district" />;
+  return <ConsumptionPage workspace="dcfp" />;
 }

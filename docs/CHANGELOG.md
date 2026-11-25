@@ -10,7 +10,8 @@ Notable changes to CLIMS. The format follows [Keep a Changelog](https://keepacha
   and supply: how often hotspots send stockout requests and what the district delivers and the hotspot
   acknowledges against them, and how often districts order from NMS and JMS and what reaches them, by
   hotspot, district or warehouse. Filters for the type requested and sent and the product; exports as
-  `consumption`. See [reports](modules/reports.md#consumption).
+  `consumption`. On the web, **Reports → Consumption** replaces the monthly report screens, which
+  called an API that never existed. See [reports](modules/reports.md#consumption).
 - **Reports and analytics for every user.** The programme reports page becomes a report section in the
   manner of Power BI and Superset: an overview, stockout requests, warehouse orders, stock and coverage,
   expiry risk, expiry exceptions, hotspot coverage and HMIS 105, each with headline figures, charts

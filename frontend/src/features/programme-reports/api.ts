@@ -26,7 +26,8 @@ export type ReportFilters = Readonly<Record<string, string>>;
 const cell = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 
 export const reportTableSchema = z.object({
-  report: z.enum(REPORT_KINDS),
+  /** Any exported report, including ones the Analytics tabs do not show (e.g. `consumption`). */
+  report: z.string(),
   title: z.string(),
   period: z.string(),
   data_updated_at: z.string(),
