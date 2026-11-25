@@ -384,6 +384,7 @@ func testOrderWorkflow(t *testing.T, pool *pgxpool.Pool,
 	testExports(t, pool, request, admin)
 	testHotspotReport(t, pool, request, admin, districtToken, otherToken, district)
 	testNationalOrderLists(t, pool, request, login, admin, warehouse, district, otherStore, reportID)
+	testConsumption(t, pool, request, admin, districtToken, otherToken, district, hotSpot)
 	testStoreSummary(t, pool, request, admin, districtToken, warehouse, district, product, unit)
 	testBatchEdit(t, pool, request, admin, districtToken, warehouse, product, unit)
 	testDistrictDispatch(t, pool, request, admin, districtToken, warehouseToken, warehouse, district, product, unit)

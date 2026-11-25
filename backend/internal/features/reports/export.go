@@ -55,7 +55,8 @@ const blankRule = "A blank cell means not applicable or not recorded; 0 is a rec
 // filterKeys are the parameters a report may be exported or saved with.
 var filterKeys = map[string]bool{"from": true, "to": true, "category": true, "district_id": true, "hot_spot_id": true,
 	"deadline_days": true, "target_percent": true, "status": true, "store_type": true, "warehouse_store_id": true,
-	"store_id": true, "band": true, "month": true}
+	"store_id": true, "band": true, "month": true, "level": true, "requested": true, "sent": true, "condom_id": true,
+	"q": true}
 
 func cols(pairs ...string) []Column {
 	out := make([]Column, 0, len(pairs)/2)
@@ -87,6 +88,7 @@ var exportColumns = map[string][]Column{
 		"expiry_date", "Expiry date", "days_remaining", "Days remaining", "quantity", "Quantity", "reason", "Reason",
 		"authorized_by", "Authorised by", "rule_version", "Rule version", "order_id", "Warehouse request",
 		"hotspot_delivery_id", "Hotspot delivery"),
+	"consumption": consumptionColumns[ConsumptionHotspot],
 	"hotspot-status": cols("id", "Hotspot ID", "name", "Hotspot", "village", "Village", "subcounty", "Subcounty", "district",
 		"District", "status", "Status", "effective_event", "Status set by", "effective_at", "Status since",
 		"contact_only", "Contact only", "manager_accounts", "Manager accounts", "submitted_by", "Submitted by",
@@ -98,7 +100,7 @@ var exportColumns = map[string][]Column{
 
 var exportTitles = map[string]string{"notifications": "Notification fulfilment", "warehouse-requests": "Warehouse requests",
 	"stock": "Store stock", "batches": "Batches and expiry", "expiry-exceptions": "Expiry exceptions", "hmis-105": "HMIS 105 readiness",
-	"hotspot-status": "Hotspot status"}
+	"hotspot-status": "Hotspot status", "consumption": "Consumption"}
 
 var exportDefinitions = map[string][]string{
 	"notifications": {"Notifications raised in the period, counted once each; repeats are shown, not counted again.",
@@ -111,11 +113,34 @@ var exportDefinitions = map[string][]string{
 		"Months of stock is issue-based over the last three complete months, and Unavailable without reconciled history."},
 	"batches":           {"Bands by calendar months left: expired, under 1 month, under 3 months, under 6 months, ok, unknown."},
 	"expiry-exceptions": {"Batches with under one month left that left a store in the period, with the documented reason."},
+	"consumption": {"Requests raised in the period, with everything delivered against them up to the data update time.",
+		"Hotspots: messages count the repeats sent against an open request; received is what the manager acknowledged.",
+		"Average days between: the mean gap between consecutive requests in the period; blank under two."},
 	"hotspot-status": {"Status: active (approved and active), pending_review, inactive (deactivated or switched off) or rejected.",
 		"Contact only: a contact person is recorded but no active account manages the hotspot yet.",
 		"Coordinates and contact details are not exported; the map shows locations under its own access rules."},
 	"hmis-105": {"Acknowledged receipts at hotspots dated by acknowledgement: operational evidence of supply, not condoms dispensed.",
 		"Not submitted: the counting event, dispensing channel and subcounty reporting units await programme approval."},
+}
+
+// consumptionColumns are the export columns of each consumption level.
+var consumptionColumns = map[string][]Column{
+	ConsumptionHotspot: cols("name", "Hotspot", "district", "District", "subcounty", "Subcounty", "requests", "Requests",
+		"messages", "Messages", "rejected", "Rejected", "average_days_between", "Average days between requests",
+		"last_requested_at", "Last request", "delivered_male_pieces", "Male pieces delivered", "delivered_female_pieces",
+		"Female pieces delivered", "received_male_pieces", "Male pieces received", "received_female_pieces",
+		"Female pieces received"),
+	ConsumptionDistrict: cols("name", "District", "orders", "Orders", "rejected", "Rejected", "average_days_between",
+		"Average days between orders", "last_ordered_at", "Last order", "requested_male_pieces", "Male pieces requested",
+		"requested_female_pieces", "Female pieces requested", "issued_male_pieces", "Male pieces issued",
+		"issued_female_pieces", "Female pieces issued", "received_male_pieces", "Male pieces received",
+		"received_female_pieces", "Female pieces received", "unconverted", "Orders without pieces"),
+	ConsumptionWarehouse: cols("name", "Warehouse", "orders", "Orders", "rejected", "Rejected", "average_days_between",
+		"Average days between orders", "requested_male_pieces", "Male pieces requested", "requested_female_pieces",
+		"Female pieces requested", "approved_male_pieces", "Male pieces approved", "approved_female_pieces",
+		"Female pieces approved", "issued_male_pieces", "Male pieces issued", "issued_female_pieces", "Female pieces issued",
+		"received_male_pieces", "Male pieces received", "received_female_pieces", "Female pieces received",
+		"dispatches_without_order", "Dispatches without an order", "pieces_without_order", "Pieces sent without an order"),
 }
 
 // build calculates a report for a user from its parameters: the summary shown on screen, where the
@@ -124,7 +149,7 @@ var exportDefinitions = map[string][]string{
 func (h *Handler) build(ctx context.Context, user *users.User, report string, p params) (any, Table, error) {
 	columns, ok := exportColumns[report]
 	if !ok {
-		return nil, Table{}, errInvalid{errors.New("report must be notifications, warehouse-requests, stock, batches, expiry-exceptions, hmis-105 or hotspot-status")}
+		return nil, Table{}, errInvalid{errors.New("report must be notifications, warehouse-requests, stock, batches, expiry-exceptions, hmis-105, hotspot-status or consumption")}
 	}
 	for key := range p {
 		if !filterKeys[key] {
@@ -167,6 +192,27 @@ func (h *Handler) build(ctx context.Context, user *users.User, report string, p 
 		t.Period = sum.Period.From + " to " + sum.Period.To
 		t.Filters["from"], t.Filters["to"] = sum.Period.From, sum.Period.To
 		t.Filters["deadline_days"], t.Filters["target_percent"] = strconv.Itoa(f.DeadlineDays), strconv.Itoa(f.Target)
+	case "consumption":
+		f, sc, err := h.consumptionFilter(ctx, user, p)
+		if err != nil {
+			return nil, Table{}, errInvalid{err}
+		}
+		s, district = sc, f.DistrictID
+		category = f.Sent
+		r, err := h.repo.consumption(ctx, s, f, h.now())
+		if err != nil {
+			return nil, Table{}, err
+		}
+		f.Limit = exportLimit + 1
+		if rows, err = h.repo.consumptionRecords(ctx, s, f); err != nil {
+			return nil, Table{}, err
+		}
+		summary, t.DataUpdatedAt = r, r.DataUpdatedAt
+		t.Columns = consumptionColumns[f.Level]
+		t.Title = map[string]string{ConsumptionHotspot: "Consumption by hotspot", ConsumptionDistrict: "Consumption by district",
+			ConsumptionWarehouse: "Supply by warehouse"}[f.Level]
+		t.Period = r.Period.From + " to " + r.Period.To
+		t.Filters["from"], t.Filters["to"], t.Filters["level"] = r.Period.From, r.Period.To, f.Level
 	case "hotspot-status":
 		f, sc, err := h.hotspotStatusFilter(ctx, user, p)
 		if err != nil {

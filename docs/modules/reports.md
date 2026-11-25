@@ -12,6 +12,8 @@ The reports module serves the programme reports described in the reporting requi
 | GET    | `/api/v1/reports/warehouse-requests/records` | `reports:read`      |
 | GET    | `/api/v1/reports/hotspot-status`             | `reports:read`      |
 | GET    | `/api/v1/reports/hotspot-status/records`     | `reports:read`      |
+| GET    | `/api/v1/reports/consumption`                | `reports:read`      |
+| GET    | `/api/v1/reports/consumption/records`        | `reports:read`      |
 | GET    | `/api/v1/reports/stock`                      | `reports:read`      |
 | GET    | `/api/v1/reports/batches`                    | `reports:read`      |
 | GET    | `/api/v1/reports/expiry-exceptions`          | `reports:read`      |
@@ -85,6 +87,22 @@ National users see every hotspot. Others see the hotspots of the district they w
 
 Reports reuse the hotspot map (RF12): `GET /api/v1/hotspots` gives each hotspot's open notification status and filters by it, and shows the village, coordinates and contact only to those allowed to see them. See [hotspots](hotspots.md#map).
 
+## Consumption
+
+CLIMS does not record what hotspots hand out, so consumption is read from demand and supply (decided 2026-11-25): how often hotspots send stockout requests and what their district delivers against them, and one level up, how often districts order from NMS and JMS and what reaches them. `GET /api/v1/reports/consumption` counts **requests raised in the period** (`from` and `to`, default the current month to date), with everything delivered against them whenever it arrived. `level` chooses the view:
+
+| `level`             | One row per        | Figures                                                                                                                                                               |
+| ------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hotspot` (default) | requesting hotspot | requests; messages (requests plus repeats); rejected; average days between requests; pieces delivered and **received** (acknowledged, the consumption figure) by type |
+| `district`          | district           | orders to NMS and JMS; rejected; average days between orders; pieces requested, approved, issued and received by type; orders without pieces yet                      |
+| `warehouse`         | warehouse          | the same, by the warehouse asked, with stock it sent without an order kept apart                                                                                      |
+
+- **Average days between** is the mean gap between consecutive requests (or orders) in the period; it is null under two.
+- **Silent hotspots**: the hotspot summary counts active hotspots in the reader's area with no matching request in the period, which is either no stockout or no reporting.
+- **Filters**: `district_id`, `warehouse_store_id`, `requested` (the type a request named: `male`, `female` or `both`; orders name only `male` or `female`), `sent` (narrows the delivery lines, or the orders, to one type), `condom_id` (one product) and `q` (a name search).
+- The summary adds `by_district` at the hotspot level, a `monthly` trend of requests and pieces received, and `field_sync` at the hotspot level. `GET /api/v1/reports/consumption/records` lists the rows, most requests first, and `GET /api/v1/reports/export/consumption?level=` exports them.
+- MOH sees every district and warehouse, a district its own hotspots and orders, and a warehouse the orders placed with it.
+
 ## Store stock
 
 `GET /api/v1/reports/stock` is a current, dated view of stock at warehouses and district stores, separate from any reporting period (`stock_date`). Each line is a store, product and unit:
@@ -133,7 +151,7 @@ A user sets targets for their assigned store only (RN11); national settings and 
 
 ## Exports
 
-`GET /api/v1/reports/export/{report}` returns a report's rows exactly as the screen shows them (RF15, RN02): `notifications`, `warehouse-requests`, `stock`, `batches`, `expiry-exceptions`, `hmis-105` or `hotspot-status`, with that report's own query parameters and access rules. Each export carries the period, [date basis](#filters-and-dates), data update time, scope, product, rule version and the definitions that apply, and the server defines the columns and their headers. `format=csv` downloads a CSV that starts with that information, then the headers and rows, with times in Kampala. Text that a spreadsheet could run as a formula is prefixed with an apostrophe. Without `format`, the JSON table is what the web screens show and turn into Excel. A blank cell means not applicable or not recorded, while 0 is a recorded zero. An export holds at most 50,000 rows; beyond that it asks for narrower filters.
+`GET /api/v1/reports/export/{report}` returns a report's rows exactly as the screen shows them (RF15, RN02): `notifications`, `warehouse-requests`, `stock`, `batches`, `expiry-exceptions`, `hmis-105`, `hotspot-status` or `consumption`, with that report's own query parameters and access rules. Each export carries the period, [date basis](#filters-and-dates), data update time, scope, product, rule version and the definitions that apply, and the server defines the columns and their headers. `format=csv` downloads a CSV that starts with that information, then the headers and rows, with times in Kampala. Text that a spreadsheet could run as a formula is prefixed with an apostrophe. Without `format`, the JSON table is what the web screens show and turn into Excel. A blank cell means not applicable or not recorded, while 0 is a recorded zero. An export holds at most 50,000 rows; beyond that it asks for narrower filters.
 
 ## No approval
 
@@ -161,6 +179,7 @@ Each report names its **date basis**, the date that places a record in its perio
 | Expiry exceptions         | When the batch left the store under the exception (in the export)             |
 | HMIS 105                  | When the hotspot manager acknowledged receipt                                 |
 | Hotspot status            | Status on the data update date; decisions by when they were made              |
+| Consumption               | When the request (or order) was raised; deliveries count up to data time      |
 | Stock and batches         | The stock date, not a reporting period                                        |
 
 Exports carry the same text in `date_basis` and in the CSV header. The expiry exceptions endpoint returns a plain list, so its date basis is in the export only.

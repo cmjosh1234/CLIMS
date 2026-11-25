@@ -5369,7 +5369,8 @@
                 "batches",
                 "expiry-exceptions",
                 "hmis-105",
-                "hotspot-status"
+                "hotspot-status",
+                "consumption"
               ]
             }
           },
@@ -6386,6 +6387,259 @@
           }
         },
         "x-required-permissions": ["users:district_create"]
+      }
+    },
+    "/api/v1/reports/consumption": {
+      "get": {
+        "tags": ["Reports"],
+        "operationId": "getConsumption",
+        "summary": "Consumption: how often hotspots or districts ask, and what reaches them",
+        "description": "Requires reports:read. Requests raised in the period, with everything delivered against them whenever it arrived. Hotspot level: requests, messages including repeats, rejected, average days between requests, pieces delivered and received by type, by district, and active hotspots with no request. District and warehouse levels: orders to NMS and JMS, rejected, average days between orders, and pieces requested, approved, issued and received by type; the warehouse level keeps stock sent without an order apart. A monthly trend of requests and pieces received. MOH sees every district and warehouse; a district its own hotspots and orders; a warehouse the orders placed with it.",
+        "parameters": [
+          {
+            "name": "level",
+            "in": "query",
+            "description": "hotspot (default): stockout requests by hotspot; district: orders to NMS and JMS by district; warehouse: the same by warehouse.",
+            "schema": {
+              "type": "string",
+              "enum": ["hotspot", "district", "warehouse"],
+              "default": "hotspot"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "First Kampala day of the requests' period, YYYY-MM-DD. Defaults to the first of the current month.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Last Kampala day, included. Defaults to today.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "district_id",
+            "in": "query",
+            "description": "One district.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "warehouse_store_id",
+            "in": "query",
+            "description": "One warehouse (district and warehouse levels).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "requested",
+            "in": "query",
+            "description": "The type requested: male, female or both (both only for hotspot requests).",
+            "schema": {
+              "type": "string",
+              "enum": ["male", "female", "both"]
+            }
+          },
+          {
+            "name": "sent",
+            "in": "query",
+            "description": "Narrows deliveries (hotspots) or orders (districts, warehouses) to one type.",
+            "schema": {
+              "type": "string",
+              "enum": ["male", "female"]
+            }
+          },
+          {
+            "name": "condom_id",
+            "in": "query",
+            "description": "One product.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Text the hotspot, district or warehouse name contains, ignoring case.",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsumptionReportResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/reports/consumption/records": {
+      "get": {
+        "tags": ["Reports"],
+        "operationId": "listConsumptionRecords",
+        "summary": "Consumption by hotspot, district or warehouse",
+        "description": "Requires reports:read. One row per requesting hotspot, district or warehouse for the same filters, most requests first. MOH sees every district and warehouse; a district its own hotspots and orders; a warehouse the orders placed with it.",
+        "parameters": [
+          {
+            "name": "level",
+            "in": "query",
+            "description": "hotspot (default): stockout requests by hotspot; district: orders to NMS and JMS by district; warehouse: the same by warehouse.",
+            "schema": {
+              "type": "string",
+              "enum": ["hotspot", "district", "warehouse"],
+              "default": "hotspot"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "First Kampala day of the requests' period, YYYY-MM-DD. Defaults to the first of the current month.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Last Kampala day, included. Defaults to today.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "district_id",
+            "in": "query",
+            "description": "One district.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "warehouse_store_id",
+            "in": "query",
+            "description": "One warehouse (district and warehouse levels).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "requested",
+            "in": "query",
+            "description": "The type requested: male, female or both (both only for hotspot requests).",
+            "schema": {
+              "type": "string",
+              "enum": ["male", "female", "both"]
+            }
+          },
+          {
+            "name": "sent",
+            "in": "query",
+            "description": "Narrows deliveries (hotspots) or orders (districts, warehouses) to one type.",
+            "schema": {
+              "type": "string",
+              "enum": ["male", "female"]
+            }
+          },
+          {
+            "name": "condom_id",
+            "in": "query",
+            "description": "One product.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Text the hotspot, district or warehouse name contains, ignoring case.",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Page size.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Rows to skip.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsumptionRecordListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
       }
     }
   },
@@ -11076,7 +11330,8 @@
               "batches",
               "expiry-exceptions",
               "hmis-105",
-              "hotspot-status"
+              "hotspot-status",
+              "consumption"
             ]
           },
           "title": {
@@ -13284,6 +13539,415 @@
                 "minimum": 0,
                 "description": "How many of the account's sessions were ended."
               }
+            }
+          }
+        }
+      },
+      "ConsumptionPieces": {
+        "type": "object",
+        "required": ["male", "female"],
+        "properties": {
+          "male": {
+            "type": "integer"
+          },
+          "female": {
+            "type": "integer"
+          }
+        }
+      },
+      "HotspotConsumption": {
+        "type": "object",
+        "required": [
+          "requests",
+          "messages",
+          "rejected",
+          "average_days_between",
+          "delivered_pieces",
+          "received_pieces"
+        ],
+        "properties": {
+          "requests": {
+            "type": "integer",
+            "description": "Requests raised, each counted once."
+          },
+          "messages": {
+            "type": "integer",
+            "description": "Requests plus the repeats sent against an open request."
+          },
+          "rejected": {
+            "type": "integer"
+          },
+          "average_days_between": {
+            "type": "number",
+            "nullable": true,
+            "description": "Mean days between consecutive requests in the period; null under two."
+          },
+          "delivered_pieces": {
+            "$ref": "#/components/schemas/ConsumptionPieces"
+          },
+          "received_pieces": {
+            "$ref": "#/components/schemas/ConsumptionPieces",
+            "description": "What the hotspot's manager acknowledged: the consumption figure."
+          }
+        }
+      },
+      "OrderConsumption": {
+        "type": "object",
+        "required": [
+          "orders",
+          "rejected",
+          "average_days_between",
+          "requested_pieces",
+          "approved_pieces",
+          "issued_pieces",
+          "received_pieces",
+          "unconverted"
+        ],
+        "properties": {
+          "orders": {
+            "type": "integer"
+          },
+          "rejected": {
+            "type": "integer"
+          },
+          "average_days_between": {
+            "type": "number",
+            "nullable": true,
+            "description": "Mean days between consecutive requests in the period; null under two."
+          },
+          "requested_pieces": {
+            "$ref": "#/components/schemas/ConsumptionPieces"
+          },
+          "approved_pieces": {
+            "$ref": "#/components/schemas/ConsumptionPieces"
+          },
+          "issued_pieces": {
+            "$ref": "#/components/schemas/ConsumptionPieces"
+          },
+          "received_pieces": {
+            "$ref": "#/components/schemas/ConsumptionPieces"
+          },
+          "unconverted": {
+            "type": "integer",
+            "description": "Orders whose quantity has no pieces yet: no product chosen, or another unit."
+          }
+        }
+      },
+      "ConsumptionReport": {
+        "type": "object",
+        "required": ["level", "period", "date_basis", "data_updated_at", "monthly"],
+        "properties": {
+          "level": {
+            "type": "string",
+            "enum": ["hotspot", "district", "warehouse"]
+          },
+          "period": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": "string",
+                "format": "date"
+              },
+              "to": {
+                "type": "string",
+                "format": "date"
+              }
+            }
+          },
+          "date_basis": {
+            "type": "string"
+          },
+          "data_updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "hotspots": {
+            "description": "Hotspot level: the totals, with hotspots requesting and active hotspots in scope with no request.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/HotspotConsumption"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "hotspots_requesting": {
+                    "type": "integer"
+                  },
+                  "silent_hotspots": {
+                    "type": "integer"
+                  }
+                }
+              }
+            ]
+          },
+          "by_district": {
+            "type": "array",
+            "description": "Hotspot level.",
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/HotspotConsumption"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "district_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "nullable": true
+                    },
+                    "district": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "hotspots_requesting": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "orders": {
+            "$ref": "#/components/schemas/OrderConsumption"
+          },
+          "dispatches_without_order": {
+            "description": "Warehouse level: stock sent to districts without an order, kept apart.",
+            "type": "object",
+            "properties": {
+              "dispatches": {
+                "type": "integer"
+              },
+              "issued_pieces": {
+                "type": "integer"
+              },
+              "received_pieces": {
+                "type": "integer"
+              },
+              "awaiting_receipt": {
+                "type": "integer"
+              }
+            }
+          },
+          "monthly": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["month", "requests", "received_pieces"],
+              "properties": {
+                "month": {
+                  "type": "string",
+                  "pattern": "^\\d{4}-\\d{2}$"
+                },
+                "requests": {
+                  "type": "integer"
+                },
+                "received_pieces": {
+                  "$ref": "#/components/schemas/ConsumptionPieces"
+                }
+              }
+            }
+          },
+          "field_sync": {
+            "$ref": "#/components/schemas/FieldSync"
+          }
+        }
+      },
+      "HotspotConsumptionRecord": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "district_id",
+          "district",
+          "subcounty",
+          "last_requested_at",
+          "requests",
+          "messages",
+          "rejected",
+          "average_days_between",
+          "delivered_male_pieces",
+          "delivered_female_pieces",
+          "received_male_pieces",
+          "received_female_pieces"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "district_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "district": {
+            "type": "string",
+            "nullable": true
+          },
+          "subcounty": {
+            "type": "string",
+            "nullable": true
+          },
+          "last_requested_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "requests": {
+            "type": "integer"
+          },
+          "messages": {
+            "type": "integer"
+          },
+          "rejected": {
+            "type": "integer"
+          },
+          "average_days_between": {
+            "type": "number",
+            "nullable": true,
+            "description": "Mean days between consecutive requests in the period; null under two."
+          },
+          "delivered_male_pieces": {
+            "type": "integer"
+          },
+          "delivered_female_pieces": {
+            "type": "integer"
+          },
+          "received_male_pieces": {
+            "type": "integer"
+          },
+          "received_female_pieces": {
+            "type": "integer"
+          }
+        }
+      },
+      "OrderConsumptionRecord": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "district_id",
+          "last_ordered_at",
+          "orders",
+          "rejected",
+          "average_days_between",
+          "requested_male_pieces",
+          "requested_female_pieces",
+          "approved_male_pieces",
+          "approved_female_pieces",
+          "issued_male_pieces",
+          "issued_female_pieces",
+          "received_male_pieces",
+          "received_female_pieces",
+          "unconverted",
+          "dispatches_without_order",
+          "pieces_without_order"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "district_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "last_ordered_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "orders": {
+            "type": "integer"
+          },
+          "rejected": {
+            "type": "integer"
+          },
+          "average_days_between": {
+            "type": "number",
+            "nullable": true,
+            "description": "Mean days between consecutive requests in the period; null under two."
+          },
+          "requested_male_pieces": {
+            "type": "integer"
+          },
+          "requested_female_pieces": {
+            "type": "integer"
+          },
+          "approved_male_pieces": {
+            "type": "integer"
+          },
+          "approved_female_pieces": {
+            "type": "integer"
+          },
+          "issued_male_pieces": {
+            "type": "integer"
+          },
+          "issued_female_pieces": {
+            "type": "integer"
+          },
+          "received_male_pieces": {
+            "type": "integer"
+          },
+          "received_female_pieces": {
+            "type": "integer"
+          },
+          "unconverted": {
+            "type": "integer"
+          },
+          "dispatches_without_order": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Warehouse level only."
+          },
+          "pieces_without_order": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Warehouse level only."
+          }
+        }
+      },
+      "ConsumptionReportResponse": {
+        "type": "object",
+        "required": ["success", "data"],
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ConsumptionReport"
+          }
+        }
+      },
+      "ConsumptionRecordListResponse": {
+        "type": "object",
+        "required": ["success", "data"],
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/HotspotConsumptionRecord"
+                },
+                {
+                  "$ref": "#/components/schemas/OrderConsumptionRecord"
+                }
+              ]
             }
           }
         }
