@@ -12,6 +12,7 @@ import {
   listAllHotspots,
   listHotspotPage,
   listHotspotEvents,
+  listHotspotsNear,
   listLocationDistricts,
   type Hotspot,
   type HotspotDecision,
@@ -26,6 +27,8 @@ export const hotspotKeys = {
   national: (filter: HotspotPageFilter) => [...hotspotsKey, 'national', filter] as const,
   detail: (id: string) => [...hotspotsKey, 'detail', id] as const,
   events: (id: string) => [...hotspotsKey, 'detail', id, 'events'] as const,
+  near: (latitude: number, longitude: number) =>
+    [...hotspotsKey, 'near', latitude, longitude] as const,
 };
 
 /** Every hotspot matching `filter` that the caller can see, read page by page. */
@@ -55,6 +58,15 @@ export function useNationalHotspots(filter: HotspotPageFilter) {
 
 export function useHotspot(id: string) {
   return useApiQuery(hotspotKeys.detail(id), (http, signal) => getHotspot(http, id, signal));
+}
+
+/** Hotspots around a point, for checking a hotspot's surroundings; off while `point` is null. */
+export function useHotspotsNear(point: { latitude: number; longitude: number } | null) {
+  return useApiQuery(
+    hotspotKeys.near(point?.latitude ?? 0, point?.longitude ?? 0),
+    (http, signal) => (point ? listHotspotsNear(http, point, signal) : Promise.resolve([])),
+    { enabled: point !== null },
+  );
 }
 
 export function useHotspotEvents(id: string) {

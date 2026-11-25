@@ -8,6 +8,7 @@ import {
   getHotspot,
   listAllHotspots,
   listHotspots,
+  listHotspotsNear,
 } from './api';
 
 function fakeHttp(...bodies: unknown[]) {
@@ -141,5 +142,19 @@ describe('decisions and comments', () => {
     expect(http.post).toHaveBeenNthCalledWith(3, `/hotspots/${wire.id}/comments`, {
       comment: 'Which village?',
     });
+  });
+});
+
+describe('listHotspotsNear', () => {
+  it('asks for hotspots within a kilometre of the point, a full page of them', async () => {
+    const http = fakeHttp({ success: true, data: [{ ...wire, distance_m: 42.5 }] });
+
+    const [hotspot] = await listHotspotsNear(http, { latitude: 0.4319, longitude: 33.197 });
+
+    expect(http.get).toHaveBeenCalledWith(
+      '/hotspots?near_lat=0.4319&near_lng=33.197&radius_m=1000&limit=100',
+      { signal: undefined },
+    );
+    expect(hotspot).toMatchObject({ id: wire.id, review: 'submitted', latitude: 0.31 });
   });
 });

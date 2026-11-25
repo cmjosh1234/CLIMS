@@ -36,6 +36,7 @@ import {
   type HotspotEvent,
 } from './api';
 import { DECISION_TEXT, DecisionDialog } from './HotspotDecisionDialog';
+import { HotspotLocationCard } from './HotspotLocationCard';
 import { dispenserSummary, hotspotLabel } from './hotspotForm';
 import { useCommentOnHotspot, useHotspot, useHotspotEvents } from './queries';
 
@@ -157,6 +158,8 @@ function HotspotView({ hotspot }: { hotspot: HotspotDetail }) {
 
       <div className="gap-section grid lg:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="gap-section flex min-w-0 flex-col">
+          <HotspotLocationCard hotspot={hotspot} />
+
           <Card>
             <CardHeader>
               <CardTitle>Comments</CardTitle>

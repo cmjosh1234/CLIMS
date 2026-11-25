@@ -117,6 +117,14 @@ interface HotspotMapCanvasProps {
    * position, or overlapping): a list to choose from, drawn beside the pin.
    */
   renderStack?: (stack: HotspotStack) => ReactNode;
+  /**
+   * A small map of one place, such as on a hotspot's page: the home button goes back to
+   * `initialBounds` instead of all of Uganda, there is no "my location", and framing
+   * leaves only a little room, as there is no style card or key over the map.
+   */
+  compact?: boolean;
+  /** What a screen reader announces for the map. */
+  label?: string;
   className?: string;
 }
 
@@ -155,6 +163,13 @@ const MAX_BOUNDS: [[number, number], [number, number]] = [
   [UGANDA_BOUNDS.west - 1.6, UGANDA_BOUNDS.south - 1.5],
   [UGANDA_BOUNDS.east + 1.6, UGANDA_BOUNDS.north + 1.5],
 ];
+
+/**
+ * On a compact map of one hotspot, the hotspots around it are drawn smaller and
+ * fainter, so the one being looked at stands out while the others keep their colours.
+ */
+const NEIGHBOUR_SCALE = 0.75;
+const NEIGHBOUR_OPACITY = 0.7;
 
 const reviewKey = (key: string) => `r_${key}`;
 const dispenserKey = (key: string) => `d_${key}`;
@@ -345,11 +360,14 @@ function sliceCounts(
   });
 }
 
-/** A map button that brings the whole country back into view. */
-class UgandaControl implements IControl {
+/** A map button that brings the whole country, or the place the map opened on, back into view. */
+class HomeControl implements IControl {
   private container: HTMLDivElement | null = null;
 
-  constructor(private readonly onClick: () => void) {}
+  constructor(
+    private readonly onClick: () => void,
+    private readonly title = 'Show all of Uganda',
+  ) {}
 
   onAdd(): HTMLElement {
     const container = document.createElement('div');
@@ -357,8 +375,8 @@ class UgandaControl implements IControl {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'hotspot-map__home';
-    button.title = 'Show all of Uganda';
-    button.setAttribute('aria-label', 'Show all of Uganda');
+    button.title = this.title;
+    button.setAttribute('aria-label', this.title);
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('viewBox', '0 0 24 24');
     svg.setAttribute('aria-hidden', 'true');
@@ -382,6 +400,7 @@ class UgandaControl implements IControl {
 
 /** Room left around a framed area, clear of the style card, the controls and the key. */
 const FRAME_PADDING = { top: 96, right: 56, bottom: 170, left: 40 };
+const COMPACT_PADDING = { top: 40, right: 56, bottom: 40, left: 40 };
 
 /**
  * How far a popup stands off a point so it clears what is drawn there, for
@@ -433,8 +452,11 @@ export default function HotspotMapCanvas({
   onTilesFailing,
   onReady,
   renderStack,
+  compact = false,
+  label = 'Hotspot map of Uganda. Use the list beside it to browse hotspots by keyboard.',
   className,
 }: HotspotMapCanvasProps) {
+  const framePadding = compact ? COMPACT_PADDING : FRAME_PADDING;
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibre | null>(null);
   const [ready, setReady] = useState(false);
@@ -465,8 +487,8 @@ export default function HotspotMapCanvas({
   const loaded = useEffectEvent(() => {
     onReady?.();
   });
-  const label = useEffectEvent((id: string) => describe(id));
-  const startingView = useEffectEvent(() => ({ basemap, dark, palette, initialBounds }));
+  const wordsFor = useEffectEvent((id: string) => describe(id));
+  const startingView = useEffectEvent(() => ({ basemap, dark, palette, initialBounds, compact }));
 
   useImperativeHandle(
     handleRef,
@@ -483,7 +505,7 @@ export default function HotspotMapCanvas({
             [bounds.west, bounds.south],
             [bounds.east, bounds.north],
           ],
-          { padding: FRAME_PADDING, maxZoom },
+          { padding: framePadding, maxZoom },
         );
       },
       flyTo: (point, zoom = 14) => {
@@ -495,7 +517,7 @@ export default function HotspotMapCanvas({
         });
       },
     }),
-    [],
+    [framePadding],
   );
 
   // Create the map once; everything else updates it in place.
@@ -544,25 +566,31 @@ export default function HotspotMapCanvas({
     map.keyboard.disableRotation();
 
     map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
+    const home = start.compact ? start.initialBounds : UGANDA_BOUNDS;
     map.addControl(
-      new UgandaControl(() => {
-        map.fitBounds(
-          [
-            [UGANDA_BOUNDS.west, UGANDA_BOUNDS.south],
-            [UGANDA_BOUNDS.east, UGANDA_BOUNDS.north],
-          ],
-          { padding: FRAME_PADDING },
-        );
-      }),
+      new HomeControl(
+        () => {
+          map.fitBounds(
+            [
+              [home.west, home.south],
+              [home.east, home.north],
+            ],
+            { padding: start.compact ? 24 : FRAME_PADDING },
+          );
+        },
+        start.compact ? 'Back to this hotspot' : undefined,
+      ),
       'top-right',
     );
-    map.addControl(
-      new GeolocateControl({
-        positionOptions: { enableHighAccuracy: true, timeout: 10_000 },
-        fitBoundsOptions: { maxZoom: 14 },
-      }),
-      'top-right',
-    );
+    if (!start.compact) {
+      map.addControl(
+        new GeolocateControl({
+          positionOptions: { enableHighAccuracy: true, timeout: 10_000 },
+          fitBoundsOptions: { maxZoom: 14 },
+        }),
+        'top-right',
+      );
+    }
     map.addControl(new ScaleControl({ unit: 'metric' }), 'bottom-right');
     map.addControl(new AttributionControl({ compact: true }), 'bottom-right');
 
@@ -623,6 +651,8 @@ export default function HotspotMapCanvas({
         'circle-color': colourExpression(initialColour, initialPalette),
         'circle-stroke-color': '#ffffff',
         'circle-stroke-width': ['interpolate', ['linear'], ['zoom'], 5, 0.75, 10, 1.25],
+        'circle-opacity': start.compact ? NEIGHBOUR_OPACITY : 1,
+        'circle-stroke-opacity': start.compact ? NEIGHBOUR_OPACITY : 1,
       };
 
       map.addLayer({
@@ -645,7 +675,7 @@ export default function HotspotMapCanvas({
         type: 'symbol',
         source: FLAT_SOURCE,
         minzoom: PIN_ZOOM,
-        layout: { ...pinLayout(image), visibility: 'none' },
+        layout: { ...pinLayout(image, start.compact ? NEIGHBOUR_SCALE : 1), visibility: 'none' },
       });
       map.addLayer({
         id: LAYERS.pins,
@@ -761,7 +791,7 @@ export default function HotspotMapCanvas({
       const features = event.features ?? [];
       const [feature] = features;
       const id: unknown = feature?.properties.id;
-      const words = typeof id === 'string' ? label(id) : null;
+      const words = typeof id === 'string' ? wordsFor(id) : null;
       if (!words || feature?.geometry.type !== 'Point') return;
       map.getCanvas().style.cursor = 'pointer';
       const others = distinctIds(features).length - 1;
@@ -1015,10 +1045,14 @@ export default function HotspotMapCanvas({
     map.setPaintProperty(
       LAYERS.flatPins,
       'icon-opacity',
-      view === 'heatmap' ? ['interpolate', ['linear'], ['zoom'], PIN_ZOOM, 0, PIN_ZOOM + 2, 1] : 1,
+      view === 'heatmap'
+        ? ['interpolate', ['linear'], ['zoom'], PIN_ZOOM, 0, PIN_ZOOM + 2, 1]
+        : compact
+          ? NEIGHBOUR_OPACITY
+          : 1,
     );
     resetClusters();
-  }, [ready, view, colourBy, palette]);
+  }, [ready, view, colourBy, palette, compact]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1057,7 +1091,7 @@ export default function HotspotMapCanvas({
       <div
         ref={containerRef}
         role="region"
-        aria-label="Hotspot map of Uganda. Use the list beside it to browse hotspots by keyboard."
+        aria-label={label}
         className={cn('hotspot-map size-full', className)}
       />
       {stack && renderStack

@@ -32,6 +32,8 @@ export const DCFP_PATHS = {
   order: (id: string) => `/dcfp/restock/${encodeURIComponent(id)}`,
   hotspots: '/dcfp/hotspots',
   hotspot: (id: string) => `/dcfp/hotspots/${encodeURIComponent(id)}`,
+  /** The hotspot map, opened on one hotspot. */
+  hotspotOnMap: (id: string) => `/dcfp/hotspot-map?hotspot=${encodeURIComponent(id)}`,
 } as const;
 
 export const STOCKOUT_STATUS: Record<
