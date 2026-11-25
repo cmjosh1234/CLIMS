@@ -10,12 +10,15 @@ import {
   type HttpClient,
 } from '@/lib/api';
 
+import { mapHotspotSchema, type MapHotspot } from './map/records';
+
 /*
  * Hotspots on the Go API (`backend/internal/features/hotspots`, `docs/modules/hotspots.md`).
  * A VHT submits one; the district's DCFP activates or rejects it, and can
  * later deactivate and reactivate it. Every decision carries a comment.
  *
  *   GET  /hotspots?status=&review_status=&district_id=&limit=&offset=   Hotspot[], most recently updated first
+ *   GET  /hotspots?near_lat=&near_lng=&radius_m=   Hotspot[] within radius_m metres, nearest first
  *   POST /hotspots                       (the mobile app's VHT submission; not used on the web)
  *   GET  /hotspots/:id                   Hotspot with its comment thread
  *   GET  /hotspots/:id/events            HotspotEvent[]
@@ -214,4 +217,28 @@ export async function listLocationDistricts(
   signal?: AbortSignal,
 ): Promise<District[]> {
   return parseList(districtSchema, await http.get('/locations/districts', { signal }), 'districts');
+}
+
+/** The furthest the nearby check looks, in metres; the API allows up to 5000. */
+export const NEARBY_RADIUS_M = 1000;
+/** The API's largest page: more nearby hotspots than this are not shown. */
+export const NEARBY_LIMIT = 100;
+
+/**
+ * Hotspots within `radius` metres of a point that the caller may see, nearest first.
+ * The API leaves out hotspots whose position is shown to the caller only to the subcounty.
+ */
+export async function listHotspotsNear(
+  http: HttpClient,
+  point: { latitude: number; longitude: number },
+  signal?: AbortSignal,
+  radius = NEARBY_RADIUS_M,
+): Promise<MapHotspot[]> {
+  const query = new URLSearchParams({
+    near_lat: String(point.latitude),
+    near_lng: String(point.longitude),
+    radius_m: String(radius),
+    limit: String(NEARBY_LIMIT),
+  });
+  return parseList(mapHotspotSchema, await http.get(`/hotspots?${query}`, { signal }), 'hotspots');
 }

@@ -64,6 +64,8 @@ type HotSpot struct {
 	// NotificationStatus is none, or the status of the open stockout notification: awaiting_supply,
 	// awaiting_acknowledgement or partly_received.
 	NotificationStatus string `json:"notification_status"`
+	// DistanceM is the distance in metres from the point of the near filter, present only with it.
+	DistanceM *float64 `json:"distance_m,omitempty"`
 }
 
 // Location precisions.

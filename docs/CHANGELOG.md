@@ -6,6 +6,12 @@ Notable changes to CLIMS. The format follows [Keep a Changelog](https://keepacha
 
 ### Added
 
+- **Consumption report.** `GET /api/v1/reports/consumption` and `/records` read consumption from demand
+  and supply: how often hotspots send stockout requests and what the district delivers and the hotspot
+  acknowledges against them, and how often districts order from NMS and JMS and what reaches them, by
+  hotspot, district or warehouse. Filters for the type requested and sent and the product; exports as
+  `consumption`. On the web, **Reports → Consumption** replaces the monthly report screens, which
+  called an API that never existed. See [reports](modules/reports.md#consumption).
 - **Reports and analytics for every user.** The programme reports page becomes a report section in the
   manner of Power BI and Superset: an overview, stockout requests, warehouse orders, stock and coverage,
   expiry risk, expiry exceptions, hotspot coverage and HMIS 105, each with headline figures, charts
@@ -75,6 +81,12 @@ Notable changes to CLIMS. The format follows [Keep a Changelog](https://keepacha
   district's field workers) can give someone who has forgotten their password a temporary one, which
   signs them out everywhere and is replaced at their next sign-in: `PUT /api/v1/users/{id}/password`
   and `PUT /api/v1/users/district/{id}/password`. The sign-in page's hint now matches.
+
+### Removed
+
+- **Report approval.** Reports are live calculations, downloaded as they stand. Migration 43 drops the
+  approved report versions and the `reports:approve` permission (`/api/v1/reports/versions` and its
+  corrections are gone), and the Analytics page loses its Approved versions tab.
 
 ### Fixed
 

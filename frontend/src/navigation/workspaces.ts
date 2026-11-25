@@ -41,13 +41,22 @@ function dashboard(path: string, title: string, description: string): NavItem {
 }
 
 /** A reporter's monthly reports (Phase 8): the list and one report. */
-function monthlyReports(path: string, description: string): NavItem {
+/** Consumption from the Go API: how often hotspots or districts ask for stock, and what reaches them. */
+function consumption(path: string, description: string): NavItem {
   return {
     id: 'reports',
-    label: 'Monthly reports',
+    label: 'Reports',
     icon: ClipboardCheck,
-    pages: [{ path, tab: 'Reports', title: 'Monthly reports', description, layout: 'table' }],
-    details: [{ path: `${path}/[id]`, label: 'Monthly report', layout: 'form' }],
+    pages: [
+      {
+        path,
+        tab: 'Consumption',
+        title: 'Consumption',
+        description,
+        layout: 'table',
+        permission: 'reports:read',
+      },
+    ],
   };
 }
 
@@ -169,6 +178,10 @@ export const workspaces: readonly Workspace[] = [
               { path: '/moh/orders/warehouse/[id]', label: 'District order', layout: 'detail' },
             ],
           },
+          consumption(
+            '/moh/reports',
+            'How often hotspots and districts ask for stock, and what reaches them, by hotspot, district and warehouse.',
+          ),
           // Where stock went: district stores to hotspots, and NMS and JMS to district stores.
           {
             id: 'distribution',
@@ -414,9 +427,9 @@ export const workspaces: readonly Workspace[] = [
       {
         label: 'Reporting',
         items: [
-          monthlyReports(
+          consumption(
             '/dcfp/reports',
-            'Send the monthly district stock report to MOH. CLIMS checks the figures before they are sent.',
+            "How often your district's hotspots ask for stock, and what you deliver and they confirm.",
           ),
           programmeReports(
             '/dcfp/programme-reports',
@@ -490,9 +503,9 @@ export const workspaces: readonly Workspace[] = [
       {
         label: 'Reporting',
         items: [
-          monthlyReports(
+          consumption(
             '/warehouse/reports',
-            'Send the monthly warehouse stock report to MOH. CLIMS checks the figures before they are sent.',
+            'How often districts order from the warehouse, and what is issued and received.',
           ),
           programmeReports(
             '/warehouse/programme-reports',

@@ -25,7 +25,7 @@ export interface ReportFilters {
 }
 
 /** Address parameters that belong to the page, not the filters (e.g. the chosen report). */
-const PAGE_PARAMS = ['view', 'version', 'store'];
+const PAGE_PARAMS = ['view', 'version', 'store', 'level', 'requested', 'sent', 'product', 'q'];
 
 /**
  * The page's report filters, read from and written to its address with

@@ -16,12 +16,10 @@ const SAMPLE_PATHS: Readonly<Record<string, string>> = {
   // Kasenyi Landing Site, a hotspot in dev/mock/hotspots.mts.
   '/dcfp/hotspots/[id]': '/dcfp/hotspots/00000000-0000-4000-8000-000000000009',
   '/moh/hotspots/[id]': '/moh/hotspots/00000000-0000-4000-8000-000000000009',
-  '/dcfp/reports/[id]': '/dcfp/reports/RPT-2610-WAKISO',
   // Kisenyi Landing Site's open stockout report (dev/mock/dcfp.mts).
   '/dcfp/stockouts/[id]': '/dcfp/stockouts/00000000-0000-4000-8302-000000000001',
   // Mukono's order NMS has reserved, waiting to be dispatched (dev/mock/dcfp.mts).
   '/warehouse/requests/[id]': '/warehouse/requests/00000000-0000-4000-8301-000000000008?store=NMS',
-  '/warehouse/reports/[id]': '/warehouse/reports/RPT-2610-NMS?store=NMS',
 };
 
 export interface RouteToVisit {

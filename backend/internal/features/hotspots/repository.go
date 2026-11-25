@@ -127,16 +127,17 @@ func place(id, name *string) *Place {
 	return &Place{ID: *id, Name: *name}
 }
 
-func scanHotSpot(row pgx.Row) (HotSpot, error) {
+// scanHotSpot reads hotSpotColumns, then any extra columns into extra.
+func scanHotSpot(row pgx.Row, extra ...any) (HotSpot, error) {
 	var h HotSpot
 	var regionID, regionName, districtID, districtName, subcountyID, subcountyName *string
 	var contactID, contactName, contactPhone *string
 	var precise bool
-	if err := row.Scan(&h.ID, &h.Name, &h.Type, &h.Village,
+	if err := row.Scan(append([]any{&h.ID, &h.Name, &h.Type, &h.Village,
 		&regionID, &regionName, &districtID, &districtName, &subcountyID, &subcountyName,
 		&h.Latitude, &h.Longitude, &h.HasCondomDispenser, &h.DispenserCondition,
 		&h.Status, &h.ReviewStatus, &h.SubmittedByID, &contactID, &contactName, &contactPhone,
-		&h.CreatedAt, &h.UpdatedAt, &precise, &h.NotificationStatus); err != nil {
+		&h.CreatedAt, &h.UpdatedAt, &precise, &h.NotificationStatus}, extra...)...); err != nil {
 		return HotSpot{}, err
 	}
 	h.LocationPrecision = PrecisionExact
@@ -165,23 +166,47 @@ type Filter struct {
 	// Search matches the hotspot's name, village, subcounty or district, or its manager's name or
 	// phone, ignoring case.
 	Search string
+	// Near keeps hotspots within a radius of a point, nearest first.
+	Near *Near
 }
 
-// list returns visible hotspots, most recently updated first.
+// nearDistance measures the great-circle distance in metres from the near point ($13, $14) to the
+// hotspot, without PostGIS. It is NULL when the near filter is off or the hotspot has no coordinates.
+const nearDistance = ` LEFT JOIN LATERAL (SELECT 2 * 6371008.8 * asin(sqrt(least(1,
+		power(sin(radians(h.latitude::float8 - $13::float8) / 2), 2)
+		+ cos(radians($13::float8)) * cos(radians(h.latitude::float8))
+		* power(sin(radians(h.longitude::float8 - $14::float8) / 2), 2)))) AS metres
+	WHERE $13::float8 IS NOT NULL) near ON true`
+
+// nearFilter keeps hotspots inside the bounding box ($16 to $19), which the location index serves,
+// then within the radius ($15). Only hotspots whose coordinates the reader may see qualify: a
+// distance would otherwise reveal a location shown only to the subcounty.
+const nearFilter = `($13::float8 IS NULL OR (h.latitude BETWEEN $16::float8::numeric AND $17::float8::numeric
+	AND h.longitude BETWEEN $18::float8::numeric AND $19::float8::numeric
+	AND near.metres <= $15::float8 AND ` + preciseLocation + `))`
+
+// list returns visible hotspots, most recently updated first, or nearest first with the near filter.
 func (r *Repository) list(ctx context.Context, access scope, f Filter, limit, offset int32) ([]HotSpot, error) {
-	rows, err := r.db.Query(ctx, `SELECT `+hotSpotColumns+hotSpotTables+
+	args := visibleArgs(access, f.Status, f.ReviewStatus, f.SubmittedByID, f.DistrictID, f.NotificationStatus, limit, offset,
+		orders.ContainsPattern(f.Search))
+	rows, err := r.db.Query(ctx, `SELECT `+hotSpotColumns+`, near.metres`+hotSpotTables+nearDistance+
 		` WHERE `+visibleHotSpots+` AND ($5 = '' OR h.status = $5) AND ($6 = '' OR h.review_status = $6)
 			AND ($7::uuid IS NULL OR h.submitted_by_id = $7) AND ($8::uuid IS NULL OR h.district_id = $8)
 			AND ($9 = '' OR `+notificationStatus+` = $9)
 			AND ($12 = '' OR h.name ILIKE $12 OR h.village ILIKE $12 OR sc.name ILIKE $12 OR d.name ILIKE $12
 				OR cp.name ILIKE $12 OR cp.phone_number ILIKE $12)
-		ORDER BY h.updated_at DESC, h.id DESC LIMIT $10 OFFSET $11`,
-		visibleArgs(access, f.Status, f.ReviewStatus, f.SubmittedByID, f.DistrictID, f.NotificationStatus, limit, offset,
-			orders.ContainsPattern(f.Search))...)
+			AND `+nearFilter+`
+		ORDER BY near.metres, h.updated_at DESC, h.id DESC LIMIT $10 OFFSET $11`,
+		append(args, f.Near.args()...)...)
 	if err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (HotSpot, error) { return scanHotSpot(row) })
+	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (HotSpot, error) {
+		var distance *float64
+		h, err := scanHotSpot(row, &distance)
+		h.DistanceM = distance
+		return h, err
+	})
 }
 
 func (r *Repository) get(ctx context.Context, access scope, id string) (Detail, error) {

@@ -7,7 +7,7 @@ import type { RecordedRequest } from '@/test/fakeAdapter';
 import { testRouter } from '@/test/navigation';
 import { renderApp, sessionWith } from '@/test/renderApp';
 
-import type { ReportTable, ReportVersion } from './api';
+import type { ReportTable } from './api';
 import { displayCell, printCell } from './files';
 import ProgrammeReportsPage from './ProgrammeReportsPage';
 
@@ -55,30 +55,10 @@ const SUMMARY = {
   settings: { review_cycle: 'monthly', deadline_days: 7, target_percent: 80, source: 'default' },
 };
 
-const VERSION: ReportVersion = {
-  id: 'v1',
-  report: 'notifications',
-  title: 'Notification fulfilment',
-  period: '2026-11-01 to 2026-11-22',
-  scope: 'National',
-  filters: {},
-  data_updated_at: '2026-11-22T09:00:00Z',
-  approved_by: 'Sarah Nakato',
-  note: null,
-  supersedes_id: null,
-  correction_reason: null,
-  superseded_by_id: 'v2',
-  status: 'superseded',
-  created_at: '2026-11-22T09:00:00Z',
-};
-
 function own(request: RecordedRequest) {
   const path = new URL(request.url, 'http://test').pathname;
   if (path === '/reports/export/notifications') return { status: 200, body: envelope(TABLE) };
   if (path === '/reports/notifications') return { status: 200, body: envelope(SUMMARY) };
-  if (path === '/reports/versions') return { status: 200, body: envelope([VERSION]) };
-  if (path === '/reports/versions/v1')
-    return { status: 200, body: envelope({ ...VERSION, export: TABLE }) };
   return null;
 }
 
@@ -88,7 +68,7 @@ describe('ProgrammeReportsPage', () => {
   it("shows the server's rows with its filters, a genuine zero apart from blank data", async () => {
     const { requests } = renderApp(<ProgrammeReportsPage workspace="moh" />, {
       route: '/moh?view=notifications&category=male',
-      session: sessionWith(['reports:read', 'reports:approve']),
+      session: sessionWith(['reports:read']),
       replies: [api],
     });
 
@@ -107,29 +87,17 @@ describe('ProgrammeReportsPage', () => {
     expect(exported?.url).toMatch(/from=\d{4}-\d{2}-01/); // the default period, last 3 months
     expect(await screen.findAllByText('Not applicable')).not.toHaveLength(0); // median with nothing fulfilled
     expect(screen.getAllByText('Male condoms').length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: 'Approve version' })).toBeEnabled();
   });
 
-  it('offers approval only with reports:approve', async () => {
+  it('has no approval: reports are downloaded as they stand', async () => {
     renderApp(<ProgrammeReportsPage workspace="moh" />, {
       route: '/moh?view=notifications',
       session: sessionWith(['reports:read']),
       replies: [api],
     });
     await screen.findByRole('cell', { name: 'Owino Market' });
-    expect(screen.queryByRole('button', { name: 'Approve version' })).not.toBeInTheDocument();
-  });
-
-  it('lists approved versions and opens one, kept as approved after a correction', async () => {
-    const user = userEvent.setup();
-    renderApp(<ProgrammeReportsPage workspace="moh" />, {
-      route: '/moh?view=versions',
-      session: sessionWith(['reports:read', 'reports:approve']),
-      replies: [api],
-    });
-    await user.click(await screen.findByRole('link', { name: 'Notification fulfilment' }));
-    expect(await screen.findByText(/kept as they were approved/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Correct' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /approve/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Approved versions' })).not.toBeInTheDocument();
   });
 
   it('opens on the overview, with figures, charts and PDF, CSV and Excel downloads', async () => {

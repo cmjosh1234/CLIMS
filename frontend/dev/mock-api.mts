@@ -34,7 +34,6 @@ import { handleMoh, seedMoh } from './mock/moh.mts';
 import { handleOnboarding, seedOnboarding } from './mock/onboarding.mts';
 import { handleAdmin, handleAuth, seedAdmin, signedInUser } from './mock/admin.mts';
 import { handleAnalytics, seedAnalytics } from './mock/analytics.mts';
-import { handleReports, seedReports } from './mock/reports.mts';
 import { handleHotspots, seedHotspotsMock } from './mock/hotspots.mts';
 
 type Body = Record<string, unknown>;
@@ -87,7 +86,6 @@ function seedAll(dataset: (typeof datasets)[number]): void {
   seedMoh(dataset);
   seedOnboarding();
   seedAdmin(dataset);
-  seedReports(dataset);
   seedAnalytics(dataset);
 }
 seedAll(DATASET);
@@ -240,13 +238,6 @@ async function route(request: IncomingMessage): Promise<Reply> {
     new URL(request.url ?? '/', 'http://mock').searchParams,
   );
   if (analytics) return analytics;
-  const reports = handleReports(
-    request.method ?? 'GET',
-    parts,
-    body,
-    new URL(request.url ?? '/', 'http://mock').searchParams,
-  );
-  if (reports) return reports;
   const hotspots = handleHotspots(
     request.method ?? 'GET',
     parts,

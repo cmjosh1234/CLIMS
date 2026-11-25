@@ -38,12 +38,10 @@ func RegisterRoutes(router fiber.Router, repo *Repository, jwt, activeUser fiber
 	group.Get("/trends", h.trends)
 	group.Get("/hotspots", h.hotspots)
 	group.Get("/hotspot-status", h.hotspotStatus)
+	group.Get("/consumption", h.consumption)
+	group.Get("/consumption/records", h.consumptionRecords)
 	group.Get("/hotspot-status/records", h.hotspotStatusRecords)
 	group.Get("/export/:report", h.export)
-	group.Get("/versions", h.listVersions)
-	group.Post("/versions", rbac.RequirePermission("reports:approve"), h.createVersion)
-	group.Get("/versions/:id", h.getVersion)
-	group.Post("/versions/:id/corrections", rbac.RequirePermission("reports:approve"), h.correctVersion)
 }
 
 // settings returns the response settings in effect for a store (store_id) or nationally, with the
@@ -171,7 +169,7 @@ func (h *Handler) hmisFilter(p params) (time.Time, *string, error) {
 	return month, district, nil
 }
 
-// params are a report's query parameters, from the request or from a saved report version.
+// params are a report's query parameters.
 type params map[string]string
 
 func (p params) get(key string, fallback ...string) string {
@@ -425,6 +423,75 @@ func (h *Handler) hotspotStatusRecords(c fiber.Ctx) error {
 	records, err := h.repo.hotspotStatusRecords(c.Context(), s, f)
 	if err != nil {
 		slog.Error("hotspot status records failed", "error", err)
+		return response.Error(c, 500, "the records could not be loaded", nil)
+	}
+	return response.Success(c, 200, "", records)
+}
+
+// consumptionFilter reads the level (hotspot, district or warehouse), the period of the requests
+// (default the current month to date), the place, the type requested and sent, the product and a search.
+func (h *Handler) consumptionFilter(ctx context.Context, user *users.User, p params) (ConsumptionFilter, scope, error) {
+	base, err := ParseFilter(p.get("from"), p.get("to"), "", "7", "80", h.now())
+	if err != nil {
+		return ConsumptionFilter{}, scope{}, err
+	}
+	f := ConsumptionFilter{Filter: base, Level: p.get("level", ConsumptionHotspot), Requested: p.get("requested"),
+		Sent: p.get("sent"), Search: strings.TrimSpace(p.get("q"))}
+	switch {
+	case f.Level != ConsumptionHotspot && f.Level != ConsumptionDistrict && f.Level != ConsumptionWarehouse:
+		return ConsumptionFilter{}, scope{}, errors.New("level must be hotspot, district or warehouse")
+	case f.Requested != "" && f.Requested != "male" && f.Requested != "female" && f.Requested != "both":
+		return ConsumptionFilter{}, scope{}, errors.New("requested must be male, female or both")
+	case f.Requested == "both" && f.Level != ConsumptionHotspot:
+		return ConsumptionFilter{}, scope{}, errRequestedBoth
+	case f.Sent != "" && f.Sent != "male" && f.Sent != "female":
+		return ConsumptionFilter{}, scope{}, errors.New("sent must be male or female")
+	case len(f.Search) > 100:
+		return ConsumptionFilter{}, scope{}, errors.New("q must be at most 100 characters")
+	}
+	for name, dst := range map[string]**string{"district_id": &f.DistrictID, "warehouse_store_id": &f.WarehouseID,
+		"condom_id": &f.CondomID} {
+		if raw := p.get(name); raw != "" {
+			id, err := request.ParseUUID(raw)
+			if err != nil {
+				return ConsumptionFilter{}, scope{}, errors.New(name + " must be a UUID")
+			}
+			*dst = &id
+		}
+	}
+	s, err := h.repo.scopeFor(ctx, user)
+	if err != nil {
+		return ConsumptionFilter{}, scope{}, errInternal{err}
+	}
+	return f, s, nil
+}
+
+// consumption reports how often hotspots (or districts) asked and what reached them, at one level.
+func (h *Handler) consumption(c fiber.Ctx) error {
+	f, s, err := h.consumptionFilter(c.Context(), users.CurrentUser(c), params(c.Queries()))
+	if err != nil {
+		return filterError(c, err)
+	}
+	report, err := h.repo.consumption(c.Context(), s, f, h.now())
+	if err != nil {
+		slog.Error("consumption report failed", "error", err)
+		return response.Error(c, 500, "the report could not be calculated", nil)
+	}
+	return response.Success(c, 200, "", report)
+}
+
+func (h *Handler) consumptionRecords(c fiber.Ctx) error {
+	p := params(c.Queries())
+	f, s, err := h.consumptionFilter(c.Context(), users.CurrentUser(c), p)
+	if err != nil {
+		return filterError(c, err)
+	}
+	if f.Limit, f.Offset, err = page(p); err != nil {
+		return response.Error(c, 400, err.Error(), nil)
+	}
+	records, err := h.repo.consumptionRecords(c.Context(), s, f)
+	if err != nil {
+		slog.Error("consumption records failed", "error", err)
 		return response.Error(c, 500, "the records could not be loaded", nil)
 	}
 	return response.Success(c, 200, "", records)

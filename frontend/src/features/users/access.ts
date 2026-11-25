@@ -109,7 +109,6 @@ const PERMISSION_LABELS: Readonly<Record<string, string>> = {
   'orders:deliver': 'Carry hotspot deliveries named for them, and see those deliveries',
   'reports:read': 'View programme reports and download them',
   'reports:configure': "Set their store's review cycle, receipt deadline and on-time target",
-  'reports:approve': 'Approve report versions and record corrections',
   'audit:read': 'Search the audit log of sign-ins and changes',
   'sync_logs:read': 'View what field phones report about sending their saved actions',
 };

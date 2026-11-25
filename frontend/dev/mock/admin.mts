@@ -185,7 +185,6 @@ export const PERMISSIONS = [
   'orders:stockout',
   'orders:supply_hotspots',
   'audit:read',
-  'reports:approve',
   'reports:configure',
   'reports:read',
   'roles:assign',
