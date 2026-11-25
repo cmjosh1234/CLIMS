@@ -50,6 +50,7 @@ Lists return the hotspots directly as `data`, most recently updated first; a com
 - `submitted_by_id`: one VHT's hotspots
 - `district_id`: one district's hotspots
 - `notification_status`: the hotspot's open stockout notification, `none`, `awaiting_supply`, `awaiting_acknowledgement` or `partly_received`, for the map
+- `q`: text the hotspot's name, village, subcounty or district, or its manager's name or phone, contains, ignoring case (at most 100 characters); MOH's national list searches with it
 
 Every hotspot carries its `notification_status`, and a `location_precision` (see the rules).
 

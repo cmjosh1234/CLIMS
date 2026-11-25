@@ -24,6 +24,12 @@ type User struct {
 	Status      string     `json:"status"`
 	LastLoginAt *time.Time `json:"last_login_at"`
 	LoginCount  int        `json:"login_count"`
+	// MustChangePassword is true while the account still has a password someone else chose (an
+	// administrator or DCFP created it or set a temporary one). Until it is changed with
+	// POST /auth/password, the API refuses every other request with 403 password_change_required.
+	MustChangePassword bool `json:"must_change_password"`
+	// PasswordChangedAt is when the account's holder last chose their password; null if never.
+	PasswordChangedAt *time.Time `json:"password_changed_at"`
 	// ActiveSessions counts the devices currently signed in.
 	ActiveSessions int         `json:"active_sessions"`
 	Role           *rbac.Role  `json:"role"`

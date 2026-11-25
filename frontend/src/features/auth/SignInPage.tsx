@@ -178,7 +178,8 @@ export default function SignInPage() {
         </div>
 
         <p className="text-muted-foreground text-center text-sm text-pretty">
-          Forgotten your password? An administrator can set a new one for you in User management.
+          Forgotten your password? Ask your administrator for a temporary one. You choose your own
+          the next time you sign in.
         </p>
       </div>
     </main>

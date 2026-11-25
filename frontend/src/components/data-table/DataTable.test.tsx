@@ -110,6 +110,20 @@ describe('DataTable', () => {
     expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
   });
 
+  it('keeps a server search that found nothing editable, so it can be cleared', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    renderTable({ rows: [], serverSearch: { value: 'nowhere', onChange } });
+
+    const box = screen.getByRole('searchbox', { name: 'Search sites' });
+    expect(box).toBeEnabled();
+    expect(box).toHaveValue('nowhere');
+    await user.clear(box);
+    await vi.waitFor(() => {
+      expect(onChange).toHaveBeenCalledWith('');
+    });
+  });
+
   it('shows placeholders, not the empty state, while loading', () => {
     renderTable({ rows: undefined, isLoading: true });
     expect(screen.queryByText('No sites yet')).not.toBeInTheDocument();

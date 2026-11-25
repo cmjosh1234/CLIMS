@@ -188,6 +188,31 @@ describe('FieldUsersPage', () => {
     });
     await screen.findByText('Grace Atim');
     expect(screen.queryByRole('button', { name: 'New user' })).not.toBeInTheDocument();
+    // Nor a temporary password: setting one needs the same permission as creating the account.
+    expect(screen.queryByRole('button', { name: /^Actions for / })).not.toBeInTheDocument();
+  });
+
+  it('gives a field user who forgot their password a temporary one', async () => {
+    const user = userEvent.setup();
+    const { requests } = renderApp(<FieldUsersPage />, {
+      session: dcfpSession(),
+      replies: [api(() => ok({ sessions_revoked: 1 }))],
+    });
+    await user.click(await screen.findByRole('button', { name: 'Actions for Grace Atim' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Set temporary password' }));
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Set a temporary password for Grace Atim',
+    });
+    const password = within(dialog).getByLabelText('Temporary password');
+    await user.click(within(dialog).getByRole('button', { name: 'Set temporary password' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+    expect(requests.find((request) => request.method === 'PUT')).toMatchObject({
+      url: '/users/district/u-1/password',
+      body: { password: (password as HTMLInputElement).value },
+    });
   });
 
   it('offers exactly the three field roles', async () => {

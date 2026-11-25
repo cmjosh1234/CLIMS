@@ -146,6 +146,31 @@ export async function listAllHotspots(
   );
 }
 
+/** One page of a national hotspot list, narrowed on the server. */
+export interface HotspotPageFilter {
+  districtId: string | null;
+  reviewStatus: ReviewStatus | null;
+  /** Matches the name, village, subcounty, district, manager or phone, ignoring case. */
+  search: string;
+}
+
+export const HOTSPOT_PAGE_SIZE = 50;
+
+/** A page of the hotspots matching `filter`, most recently updated first. */
+export async function listHotspotPage(
+  http: HttpClient,
+  filter: HotspotPageFilter,
+  offset: number,
+  signal?: AbortSignal,
+): Promise<Hotspot[]> {
+  const query = new URLSearchParams({ limit: String(HOTSPOT_PAGE_SIZE) });
+  if (offset > 0) query.set('offset', String(offset));
+  if (filter.districtId) query.set('district_id', filter.districtId);
+  if (filter.reviewStatus) query.set('review_status', filter.reviewStatus);
+  if (filter.search) query.set('q', filter.search);
+  return parseList(hotspotSchema, await http.get(`/hotspots?${query}`, { signal }), 'hotspots');
+}
+
 export async function getHotspot(
   http: HttpClient,
   id: string,

@@ -12,7 +12,7 @@ import { ADMIN_PERMISSIONS, renderApp, sessionWith } from '@/test/renderApp';
 
 import { signInHref } from './guards';
 import { allPaths } from './navigation';
-import { HOME_PATH, PUBLIC_PATHS } from './paths';
+import { ACCOUNT_PATHS, HOME_PATH, PUBLIC_PATHS } from './paths';
 import { workspaces } from './workspaces';
 
 const routes = <AppUnderTest />;
@@ -20,8 +20,11 @@ const routes = <AppUnderTest />;
 describe('navigation table', () => {
   it('lists exactly the screens that have a page', () => {
     const listed = allPaths(workspaces).sort();
-    // Sign-in and onboarding sit outside the signed-in app, so the sidebar table does not list them.
-    expect(routedPaths.filter((path) => !PUBLIC_PATHS.includes(path))).toEqual(listed);
+    // Sign-in and onboarding sit outside the signed-in app, and the profile outside every
+    // workspace, so the sidebar table does not list them.
+    expect(
+      routedPaths.filter((path) => !PUBLIC_PATHS.includes(path) && !ACCOUNT_PATHS.includes(path)),
+    ).toEqual(listed);
   });
 
   it('gives every path one entry', () => {
@@ -278,7 +281,7 @@ describe('app shell', () => {
     for (const section of ['Overview', 'Fulfilment', 'Network']) {
       expect(within(nav).getByRole('group', { name: section })).toBeInTheDocument();
     }
-    expect(within(nav).queryByRole('link', { name: 'Procurement' })).not.toBeInTheDocument();
+    expect(within(nav).queryByRole('link', { name: 'Distribution' })).not.toBeInTheDocument();
     // On a tab other than the first, the item is current without being this page.
     expect(within(nav).getByRole('link', { name: 'Hotspots' })).toHaveAttribute(
       'aria-current',
@@ -426,8 +429,8 @@ describe('app shell', () => {
 describe('theme', () => {
   it('starts light, switches to dark on request and remembers the choice', async () => {
     const user = userEvent.setup();
-    const { storage } = renderApp(routes, { route: '/moh/procurement', signedIn: true });
-    await screen.findByRole('heading', { name: 'Procurement' });
+    const { storage } = renderApp(routes, { route: '/moh/users', signedIn: true });
+    await screen.findByRole('heading', { level: 1, name: 'User management' });
     expect(document.documentElement).not.toHaveClass('dark');
 
     await user.click(screen.getByRole('button', { name: 'Switch to dark theme' }));
@@ -531,11 +534,11 @@ describe('signing out', () => {
   it('still signs out locally when the server cannot be reached', async () => {
     const user = userEvent.setup();
     const { store } = renderApp(routes, {
-      route: '/moh/procurement',
+      route: '/moh/users',
       signedIn: true,
       replies: [{ failure: 'network' }],
     });
-    await screen.findByRole('heading', { name: 'Procurement' });
+    await screen.findByRole('heading', { level: 1, name: 'User management' });
 
     await user.click(screen.getByRole('button', { name: /account menu/i }));
     await user.click(await screen.findByRole('menuitem', { name: 'Sign out' }));

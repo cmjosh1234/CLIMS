@@ -10,6 +10,7 @@ import { DistrictContextProvider } from '@/features/district/DistrictContext';
 import { useDcfpCounts } from '@/features/dcfp/useDcfpCounts';
 import { useNotificationFeed } from '@/features/notifications/useNotificationFeed';
 import { useWarehouseCounts } from '@/features/warehouse/useWarehouseCounts';
+import { PasswordChangeRequired } from '@/features/account/PasswordChangeRequired';
 import { useAppStorage } from '@/lib/storage/StorageProvider';
 
 import { accessTo, navigationFor } from './access';
@@ -22,7 +23,7 @@ import {
 } from './AccessScreens';
 import { Redirect, RequireAuth } from './guards';
 import { locate } from './navigation';
-import { HOME_PATH } from './paths';
+import { HOME_PATH, PROFILE_PATH } from './paths';
 import { ReadOnlyProvider, useHomeWorkspace, useWebAccess } from './useAccess';
 import { workspaces } from './workspaces';
 
@@ -34,10 +35,32 @@ interface AppFrameProps {
 export function AppFrame({ children }: AppFrameProps) {
   return (
     <RequireAuth>
-      <SignedInShell>{children}</SignedInShell>
+      <PasswordGate>
+        <SignedInShell>{children}</SignedInShell>
+      </PasswordGate>
     </RequireAuth>
   );
 }
+
+/**
+ * Holds back the app while the account must replace a password someone else
+ * chose (`must_change_password`): the API refuses everything else until then,
+ * so the shell would only fill with errors. The current address is kept, so
+ * the person lands where they were going once the password is saved.
+ */
+function PasswordGate({ children }: AppFrameProps) {
+  const user = useCurrentUser();
+  if (user?.must_change_password) return <PasswordChangeRequired />;
+  return children;
+}
+
+/** Pages about the signed-in person's own account, outside every workspace. */
+const ACCOUNT_PAGES: Readonly<Record<string, { title: string; description: string }>> = {
+  [PROFILE_PATH]: {
+    title: 'Your profile',
+    description: 'Your details, your password, where you work and where you are signed in.',
+  },
+};
 
 const inside = (pathname: string, base: string) =>
   pathname === base || pathname.startsWith(`${base}/`);
@@ -105,7 +128,8 @@ function SignedInShell({ children }: AppFrameProps) {
         : null;
 
   let content = children;
-  let fallbackTitle: string | undefined;
+  const accountPage = ACCOUNT_PAGES[pathname];
+  let fallbackTitle = accountPage?.title;
   if (blocked === 'workspace') {
     content = <NotYourWorkspace workspace={target.workspace} home={home} />;
     fallbackTitle = 'Not part of your work';
@@ -118,7 +142,8 @@ function SignedInShell({ children }: AppFrameProps) {
     }
   }
 
-  const readOnly = level === 'read' && blocked === null;
+  // A person's own account is theirs to change, whichever workspace the sidebar shows beside it.
+  const readOnly = level === 'read' && blocked === null && !accountPage;
   const hasNoPermissions = user?.permissions?.length === 0;
 
   return (
@@ -130,6 +155,7 @@ function SignedInShell({ children }: AppFrameProps) {
         notifications={feed.notifications}
         notificationActions={feed.actions}
         fallbackTitle={fallbackTitle}
+        fallbackDescription={accountPage?.description}
       >
         {readOnly ? <ReadOnlyNotice workspace={target.workspace} /> : null}
         {hasNoPermissions && blocked === null ? <NoPermissionsNotice /> : null}

@@ -8,6 +8,7 @@ import { useStore } from "@/lib/store";
 import { OrderScreen } from "./order";
 import { RiderDelivery, RiderReceipt } from "./rider";
 import { RiderAssignment } from "./riderLive";
+import { ChangePassword, EditDetails } from "./account";
 import { Help, Inbox } from "./shared";
 import { StockoutForm } from "./stockout";
 import { StockoutScreen } from "./stockoutDetail";
@@ -77,6 +78,11 @@ export default function Detail() {
       return id ? <RiderReceipt id={id} /> : null;
     case "help":
       return <Help />;
+    // The person's own account, opened from Me. Sample-data sign-ins have no account to change.
+    case "details":
+      return me.demo ? null : <EditDetails />;
+    case "password":
+      return me.demo ? null : <ChangePassword />;
     case "inbox":
       return <Inbox />;
   }

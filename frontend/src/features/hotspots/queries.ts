@@ -1,24 +1,29 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { notificationKeys } from '@/features/notifications/queries';
-import { useApiQuery, useHttp } from '@/lib/api';
+import { useApiQuery, useHttp, type ApiError } from '@/lib/api';
 
 import {
   commentOnHotspot,
   decideOnHotspot,
   getHotspot,
+  HOTSPOT_PAGE_SIZE,
   listAllHotspots,
+  listHotspotPage,
   listHotspotEvents,
   listLocationDistricts,
+  type Hotspot,
   type HotspotDecision,
   type HotspotFilter,
+  type HotspotPageFilter,
 } from './api';
 
 const hotspotsKey = ['hotspots'] as const;
 export const hotspotKeys = {
   all: hotspotsKey,
   allPages: (filter: HotspotFilter) => [...hotspotsKey, 'all', filter] as const,
+  national: (filter: HotspotPageFilter) => [...hotspotsKey, 'national', filter] as const,
   detail: (id: string) => [...hotspotsKey, 'detail', id] as const,
   events: (id: string) => [...hotspotsKey, 'detail', id, 'events'] as const,
 };
@@ -30,6 +35,22 @@ export function useAllHotspots(filter: HotspotFilter = {}, { enabled = true } = 
     (http, signal) => listAllHotspots(http, filter, signal),
     { enabled },
   );
+}
+
+/** Every district's hotspots a page at a time, filtered and searched on the server (MOH). */
+export function useNationalHotspots(filter: HotspotPageFilter) {
+  const http = useHttp();
+  // `http` is the provider's one client, so it is not part of the key.
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps
+  return useInfiniteQuery<Hotspot[], ApiError>({
+    queryKey: hotspotKeys.national(filter),
+    queryFn: ({ pageParam, signal }) =>
+      listHotspotPage(http, filter, typeof pageParam === 'number' ? pageParam : 0, signal),
+    initialPageParam: 0,
+    // A short page is the last one; the API gives no total.
+    getNextPageParam: (last, pages) =>
+      last.length < HOTSPOT_PAGE_SIZE ? undefined : pages.length * HOTSPOT_PAGE_SIZE,
+  });
 }
 
 export function useHotspot(id: string) {

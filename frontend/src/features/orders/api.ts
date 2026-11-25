@@ -70,6 +70,12 @@ export const orderSchema = z.object({
   hot_spot_id: text,
   created_at: z.string(),
   updated_at: z.string(),
+  /**
+   * When the order left the warehouse and when the district received it, from its history. Lists
+   * and `GET /orders/{id}` carry them; a workflow step's reply does not.
+   */
+  dispatched_at: z.string().nullable().default(null),
+  received_at: z.string().nullable().default(null),
 });
 
 export type Order = z.infer<typeof orderSchema>;

@@ -1,4 +1,4 @@
-import DistributionPage from '@/features/orders/DistributionPage';
+import DistributionPage from '@/features/distribution/DistributionPage';
 import { pageMetadata } from '@/navigation/pageMetadata';
 
 export const metadata = pageMetadata('/moh/distribution');

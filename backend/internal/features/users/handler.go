@@ -101,6 +101,8 @@ func (h *Handler) CreateUser(c fiber.Ctx) error {
 	}
 	req.AccountInput.Assignment = req.FacilityAssignment
 	req.AccountInput.StoreID = req.StoreID
+	// The administrator chose this password, so the person replaces it at their first sign-in.
+	req.AccountInput.MustChangePassword = true
 	roleIDs := []string{req.RoleID}
 	if req.RoleIDs != nil {
 		roleIDs = *req.RoleIDs

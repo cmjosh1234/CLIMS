@@ -66,6 +66,14 @@ export interface ApiUser {
     district_id: string | null;
     district_name: string | null;
   } | null;
+  /**
+   * True while the account still has a password someone else chose (the DCFP or an administrator
+   * created it, or set a temporary one). Until it is changed, the API answers only GET /auth/me,
+   * POST /auth/password and POST /auth/logout.
+   */
+  must_change_password?: boolean;
+  /** When the account holder last chose their own password; null if never. */
+  password_changed_at?: string | null;
 }
 
 /** `TokenPair` in docs/api/openapi.json. */
@@ -109,18 +117,36 @@ const EARLY_MS = 30_000;
 let tokens: StoredTokens | null = null;
 let onTokens: (t: StoredTokens) => void = () => {};
 let onSessionEnded: () => void = () => {};
+let onPasswordChangeRequired: () => void = () => {};
 let inflight: Promise<StoredTokens> | null = null;
 
 /**
  * Wire the session layer in: `tokensChanged` persists rotated tokens and `sessionEnded`
  * signs the user out when the server refuses the refresh token (401) or the account (403).
+ * `passwordChangeRequired` runs when the API refuses a request until the password is changed.
  */
 export function configureAuth(handlers: {
   tokensChanged: (t: StoredTokens) => void;
   sessionEnded: () => void;
+  passwordChangeRequired?: () => void;
 }) {
   onTokens = handlers.tokensChanged;
   onSessionEnded = handlers.sessionEnded;
+  onPasswordChangeRequired = handlers.passwordChangeRequired ?? (() => {});
+}
+
+/** `error.code` of the API's 403 for an account that must change its password first. */
+export const PASSWORD_CHANGE_REQUIRED = "password_change_required";
+
+/** True for the API's 403 that asks for a new password before anything else. */
+export function isPasswordChangeRequired(err: unknown): boolean {
+  if (!isAxiosError(err) || err.response?.status !== 403) return false;
+  const error = (err.response.data as { error?: unknown } | undefined)?.error;
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    (error as { code?: unknown }).code === PASSWORD_CHANGE_REQUIRED
+  );
 }
 
 export function setTokens(t: StoredTokens | null) {
@@ -197,6 +223,9 @@ api.interceptors.request.use(async (cfg) => {
 });
 
 api.interceptors.response.use(undefined, async (err: AxiosError) => {
+  // A session saved before the account had to change its password (or by an older app) learns it
+  // here, and the app asks for a new password instead of failing every request.
+  if (isPasswordChangeRequired(err) && tokens) onPasswordChangeRequired();
   const cfg = err.config as Cfg | undefined;
   if (err.response?.status !== 401 || !cfg || cfg._retried || !tokens) throw err;
   // The access token was rejected early (revoked, clock skew); refresh once and retry.
@@ -252,6 +281,83 @@ export function loginErrorMessage(err: unknown): string {
     if (s === 429) return "Too many attempts. Wait a minute, then try again.";
     if (s === 422 || s === 400) return "Enter your email address, username or phone number.";
     if (!err.response) return "Can't reach CLIMS. Check your network and try again.";
+  }
+  if (err instanceof Error && err.message) return err.message;
+  return "Something went wrong. Try again.";
+}
+
+// ---- The signed-in person's own account -------------------------------------------------------
+
+/** GET /auth/me: the account as the server has it now. */
+export async function getMe(): Promise<ApiUser> {
+  const { data } = await api.get<{ data: ApiUser }>("/auth/me");
+  return data.data;
+}
+
+export interface PasswordChange {
+  /** Required, except while the account must replace a password someone else chose. */
+  current_password?: string;
+  new_password: string;
+}
+
+export interface PasswordChanged {
+  user: ApiUser;
+  /** How many other devices were signed out. */
+  sessions_revoked: number;
+}
+
+/** POST /auth/password. This phone stays signed in; every other device is signed out. */
+export async function changePassword(change: PasswordChange): Promise<PasswordChanged> {
+  const body: PasswordChange = { new_password: change.new_password };
+  if (change.current_password) body.current_password = change.current_password;
+  const { data } = await api.post<{ data: PasswordChanged }>("/auth/password", body);
+  return data.data;
+}
+
+/** The profile fields a person may change themselves; any left out keep their value. */
+export interface ProfileChanges {
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  phone_number?: string;
+  /** Required when the email address or phone number changes: both sign in. */
+  current_password?: string;
+}
+
+/** PATCH /auth/me: the updated account. */
+export async function updateProfile(changes: ProfileChanges): Promise<ApiUser> {
+  const { data } = await api.patch<{ data: ApiUser }>("/auth/me", changes);
+  return data.data;
+}
+
+/**
+ * The API's per-field messages from a refused change (422 validation, 409 taken email or phone), by
+ * field name; empty when the failure was about something else.
+ */
+export function fieldErrors(err: unknown): Record<string, string> {
+  if (!isAxiosError(err)) return {};
+  const s = err.response?.status;
+  if (s !== 422 && s !== 409) return {};
+  const error = (err.response?.data as { error?: unknown } | undefined)?.error;
+  if (typeof error !== "object" || error === null) return {};
+  const out: Record<string, string> = {};
+  for (const [field, message] of Object.entries(error)) {
+    if (typeof message === "string" && message.trim()) out[field] = message;
+  }
+  return out;
+}
+
+/** A sentence for a profile or password change that failed for a reason no field explains. */
+export function accountErrorMessage(err: unknown): string {
+  if (isAxiosError(err)) {
+    const s = err.response?.status;
+    if (!err.response)
+      return "Can't reach CLIMS. Check your network and try again. This can't be saved offline.";
+    if (s === 429) return "Too many attempts. Wait a minute, then try again.";
+    if (s === 401) return "Your session has ended. Sign in again.";
+    if (s === 403) return "Your account is switched off. Call your district focal person.";
+    if (s === 409) return "That email address or phone number belongs to another account.";
+    if (s === 400 || s === 422) return "Some details weren't accepted. Check them and try again.";
   }
   if (err instanceof Error && err.message) return err.message;
   return "Something went wrong. Try again.";

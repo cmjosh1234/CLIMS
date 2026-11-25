@@ -129,6 +129,8 @@ export function Me() {
   const [push, setPush] = useState(true);
   const [outbox, setOutbox] = useState(false);
   const nq = s.outbox.length;
+  const changedAt = me.passwordChangedAt ? Date.parse(me.passwordChangedAt) : NaN;
+  const passwordChanged = Number.isFinite(changedAt) ? changedAt : undefined;
   const demoHotspot =
     me.demo && me.role === "hm" ? s.hotspots.find((h) => h.id === HM_HOTSPOT) : undefined;
   const hotspot = me.hotspot ?? demoHotspot;
@@ -194,12 +196,30 @@ export function Me() {
           </Txt>
         </View>
       </Section>
-      <List h="Account">
+      <List h="Account" f={me.demo ? undefined : "Only an administrator can change your username."}>
         <Row t="Username" v={me.username} />
         {me.email ? <Row t="Email" v={me.email} /> : null}
         {me.phone ? <Row t="Phone" v={me.phone} /> : null}
+        {me.demo ? null : (
+          <Row t="Edit details" fg={T.tint} chev onPress={() => nav.go("details")} />
+        )}
       </List>
-      <List h="Assignments" empty="No assignment details available.">
+      {me.demo ? null : (
+        <List h="Password">
+          <Row
+            t="Change password"
+            s={passwordChanged ? `Last changed ${ago(passwordChanged)}` : undefined}
+            fg={T.tint}
+            chev
+            onPress={() => nav.go("password")}
+          />
+        </List>
+      )}
+      <List
+        h="Assignments"
+        f="Your district focal person manages your role and assignments."
+        empty="No assignment details available."
+      >
         {assignments.map(({ label, name, detail }) => (
           <Row key={label} t={label} s={[name, detail].filter(Boolean).join("\n")} />
         ))}

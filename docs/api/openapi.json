@@ -680,7 +680,7 @@
         "tags": ["Auth"],
         "operationId": "getProfile",
         "summary": "Get the current profile",
-        "description": "Any active account can read its own profile, including accounts with no assigned role. Status and permissions are reloaded from PostgreSQL.",
+        "description": "Any active account can read its own profile, including accounts with no assigned role. Status and permissions are reloaded from PostgreSQL. Answers while the account must still change its password (must_change_password).",
         "responses": {
           "200": {
             "description": "Success",
@@ -700,6 +700,76 @@
           },
           "500": {
             "$ref": "#/components/responses/InternalError"
+          }
+        }
+      },
+      "patch": {
+        "tags": ["Auth"],
+        "operationId": "updateProfile",
+        "summary": "Change your own name, email or phone",
+        "description": "The signed-in person changes their first and last name, email address and phone number. Changing the email address or phone number needs current_password. Username, roles, store, hotspot and place of work are set by administrators and are refused here as unknown fields (400). Returns the updated profile. Refused attempts count towards a limit of 10 per account per minute.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProfileRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "409": {
+            "description": "The email address or phone number belongs to another account; `error.email` or `error.phone_number` says which.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "validation failed; `error` maps each field (first_name, last_name, email, phone_number, current_password) to what to fix.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many refused attempts; try again in a minute.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -761,7 +831,7 @@
         "tags": ["Users"],
         "operationId": "createUser",
         "summary": "Create a user with roles",
-        "description": "Creates an account with one or more existing roles. Requires users:create and roles:assign. Email addresses, usernames and phone numbers must each be unused: a taken value returns 409 naming the field. Emails and usernames are compared case-insensitively and phone numbers by their digits, so 0772 123456 and +256772123456 conflict.",
+        "description": "Creates an account with one or more existing roles. Requires users:create and roles:assign. Email addresses, usernames and phone numbers must each be unused: a taken value returns 409 naming the field. Emails and usernames are compared case-insensitively and phone numbers by their digits, so 0772 123456 and +256772123456 conflict. The person must replace the password at their first sign-in (must_change_password).",
         "responses": {
           "201": {
             "description": "Success",
@@ -838,7 +908,7 @@
         "tags": ["Users"],
         "operationId": "createDistrictUser",
         "summary": "Create a field user in your district",
-        "description": "For district focal persons: creates a VHT, hotspot manager or delivery agent account in the caller's own district, and no other role. A VHT needs subcounty_id, a subcounty in the district. A hotspot manager needs hot_spot_id, an active hotspot in the district; their subcounty is the hotspot's. A delivery agent is assigned the district store. Other assignment fields are ignored. Identifiers must be unused, as for createUser (409). A caller with no district gets 403. Requires all permissions: users:district_create.",
+        "description": "For district focal persons: creates a VHT, hotspot manager or delivery agent account in the caller's own district, and no other role. A VHT needs subcounty_id, a subcounty in the district. A hotspot manager needs hot_spot_id, an active hotspot in the district; their subcounty is the hotspot's. A delivery agent is assigned the district store. Other assignment fields are ignored. Identifiers must be unused, as for createUser (409). A caller with no district gets 403. The field worker must replace the password at their first sign-in (must_change_password). Requires all permissions: users:district_create.",
         "responses": {
           "201": {
             "description": "Success",
@@ -1365,7 +1435,7 @@
         "tags": ["Auth"],
         "operationId": "logout",
         "summary": "Sign out",
-        "description": "Ends the session that issued this token. The token is rejected from then on.",
+        "description": "Ends the session that issued this token. The token is rejected from then on. Answers while a password change is pending.",
         "responses": {
           "200": {
             "description": "Success",
@@ -2485,6 +2555,15 @@
             "schema": {
               "type": "string",
               "enum": ["none", "awaiting_supply", "awaiting_acknowledgement", "partly_received"]
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Text the hotspot's name, village, subcounty or district, or its manager's name or phone, contains, ignoring case; % and _ match themselves.",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
             }
           },
           {
@@ -6155,6 +6234,393 @@
           }
         }
       }
+    },
+    "/api/v1/orders/hotspot-deliveries": {
+      "get": {
+        "tags": ["Orders"],
+        "operationId": "listHotspotDistributions",
+        "summary": "List what district stores delivered to hotspots",
+        "description": "Requires orders:read. Covers the deliveries of the stockout notifications you can see (as for GET /orders/stockouts): orders:all_stores sees every district's. One row per delivery line, newest delivery first, with the hotspot, district store, product, unit, quantity, pieces, who sent it, the delivery agent and the manager's acknowledgement. Lists use limit (default 50, maximum 100) and offset.",
+        "parameters": [
+          {
+            "name": "district_id",
+            "in": "query",
+            "description": "The hotspot's district.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["male", "female"]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "First delivery day, YYYY-MM-DD in Kampala time.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Last delivery day, YYYY-MM-DD in Kampala time, inclusive.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Text the hotspot's name, village, subcounty or district, the product or the delivery agent contains, ignoring case; % and _ match themselves.",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DistributionLineListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/orders/hotspot-deliveries/summary": {
+      "get": {
+        "tags": ["Orders"],
+        "operationId": "summarizeHotspotDistributions",
+        "summary": "Total what district stores delivered to hotspots",
+        "description": "Requires orders:read. Covers the deliveries of the stockout notifications you can see (as for GET /orders/stockouts): orders:all_stores sees every district's. Totals the lines GET /orders/hotspot-deliveries lists with the same filters.",
+        "parameters": [
+          {
+            "name": "district_id",
+            "in": "query",
+            "description": "The hotspot's district.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["male", "female"]
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "First delivery day, YYYY-MM-DD in Kampala time.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Last delivery day, YYYY-MM-DD in Kampala time, inclusive.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Text the hotspot's name, village, subcounty or district, the product or the delivery agent contains, ignoring case; % and _ match themselves.",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DistributionSummaryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/password": {
+      "post": {
+        "tags": ["Auth"],
+        "operationId": "changePassword",
+        "summary": "Change your own password",
+        "description": "Sets the password the signed-in person chose and clears must_change_password. Every other session of the account is signed out; the one making the request stays signed in. Answers while a password change is pending. Refused attempts count towards a limit of 10 per account per minute.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangePasswordResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "422": {
+            "description": "validation failed; `error.new_password` or `error.current_password` says what to fix.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many refused attempts; try again in a minute.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/{id}/password": {
+      "put": {
+        "tags": ["Users"],
+        "operationId": "setTemporaryPassword",
+        "summary": "Give a user a temporary password",
+        "description": "For a person who has forgotten their password. Sets a temporary password, signs the account out everywhere, and makes them choose their own at their next sign-in. Only an administrator may do this to an administrator's account (403). Your own password is changed with POST /auth/password instead (422). Requires all permissions: users:update.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemporaryPasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemporaryPasswordResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "404": {
+            "description": "User not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "validation failed; `error.password` says what to fix.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-required-permissions": ["users:update"]
+      }
+    },
+    "/api/v1/users/district/{id}/password": {
+      "put": {
+        "tags": ["Users"],
+        "operationId": "setDistrictUserTemporaryPassword",
+        "summary": "Give a field user in your district a temporary password",
+        "description": "As setTemporaryPassword, for a district focal person and only the VHTs, hotspot managers and delivery agents in their own district (the accounts listDistrictUsers returns); anyone else is 404. A caller with no district gets 403. Requires all permissions: users:district_create.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemporaryPasswordRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemporaryPasswordResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "404": {
+            "description": "Not a field user in your district.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "validation failed; `error.password` says what to fix.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-required-permissions": ["users:district_create"]
+      }
     }
   },
   "components": {
@@ -6492,6 +6958,16 @@
           "unrequested": {
             "type": "boolean",
             "description": "True for stock the warehouse sent without an order (POST /api/v1/orders/district-dispatches): created dispatched, received like any shipment, and left out of request statistics."
+          },
+          "dispatched_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the order left the warehouse, from its history. Only list and GET /api/v1/orders/{id} replies carry it; absent before dispatch."
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the district received the order, from its history. Only list and GET /api/v1/orders/{id} replies carry it; absent before receipt."
           }
         }
       },
@@ -6815,7 +7291,9 @@
           "last_name",
           "location",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "must_change_password",
+          "password_changed_at"
         ],
         "properties": {
           "id": {
@@ -7041,6 +7519,16 @@
             "type": "integer",
             "minimum": 0,
             "description": "Devices currently signed in: live, unrevoked sessions."
+          },
+          "must_change_password": {
+            "type": "boolean",
+            "description": "True while the account still has a password someone else chose: an administrator or DCFP created it or set a temporary one. Until it is changed with POST /auth/password, every other request except GET /auth/me and POST /auth/logout returns 403 with `error.code` = `password_change_required`."
+          },
+          "password_changed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "When the account holder last chose their own password; null if they never have."
           }
         }
       },
@@ -12974,6 +13462,311 @@
             "$ref": "#/components/schemas/Geography"
           }
         }
+      },
+      "DistributionLine": {
+        "type": "object",
+        "required": [
+          "id",
+          "delivery_id",
+          "stockout_report_id",
+          "delivered_at",
+          "hot_spot_id",
+          "hot_spot",
+          "district_store_id",
+          "district_store",
+          "category",
+          "condom_id",
+          "product",
+          "unit",
+          "quantity",
+          "pieces",
+          "sent_by"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The delivery line."
+          },
+          "delivery_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "stockout_report_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "delivered_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "hot_spot_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "hot_spot": {
+            "type": "string"
+          },
+          "village": {
+            "type": "string",
+            "nullable": true
+          },
+          "subcounty": {
+            "type": "string",
+            "nullable": true
+          },
+          "district_id": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "district": {
+            "type": "string",
+            "nullable": true
+          },
+          "district_store_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "district_store": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": ["male", "female"]
+          },
+          "condom_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "product": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int32",
+            "description": "In the product's unit."
+          },
+          "pieces": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "sent_by": {
+            "type": "string",
+            "description": "Who recorded the delivery."
+          },
+          "rider": {
+            "type": "string",
+            "nullable": true,
+            "description": "The delivery agent carrying it, when the district named one."
+          },
+          "rider_phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "acknowledged_pieces": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "description": "What the hotspot's manager confirmed receiving."
+          },
+          "acknowledged_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          }
+        }
+      },
+      "DistributionSummary": {
+        "type": "object",
+        "required": [
+          "deliveries",
+          "hotspots",
+          "pieces",
+          "male_pieces",
+          "female_pieces",
+          "acknowledged_pieces",
+          "unacknowledged_lines"
+        ],
+        "properties": {
+          "deliveries": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "hotspots": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "pieces": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "male_pieces": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "female_pieces": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "acknowledged_pieces": {
+            "type": "integer",
+            "format": "int64",
+            "description": "What hotspot managers confirmed receiving."
+          },
+          "unacknowledged_lines": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Delivery lines no manager has confirmed yet."
+          }
+        }
+      },
+      "DistributionLineListResponse": {
+        "type": "object",
+        "required": ["success", "data"],
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DistributionLine"
+            }
+          }
+        }
+      },
+      "DistributionSummaryResponse": {
+        "type": "object",
+        "required": ["success", "data"],
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/DistributionSummary"
+          }
+        }
+      },
+      "UpdateProfileRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Fields left out keep their value, and a field sent unchanged is ignored. Changing the email address or phone number, which the person signs in with, needs current_password.",
+        "properties": {
+          "first_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          },
+          "last_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 20
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 255,
+            "description": "Stored in lower case. Cannot be removed."
+          },
+          "phone_number": {
+            "type": "string",
+            "maxLength": 15,
+            "description": "9 to 15 digits with an optional leading +; spaces, dashes and brackets are dropped. An empty string removes it."
+          },
+          "current_password": {
+            "type": "string",
+            "description": "Required when email or phone_number changes."
+          }
+        }
+      },
+      "ChangePasswordRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["new_password"],
+        "properties": {
+          "current_password": {
+            "type": "string",
+            "description": "Required, except while `must_change_password` is true: the person signed in with that password moments ago, and every older session ended when it was set. If sent, it is checked."
+          },
+          "new_password": {
+            "type": "string",
+            "minLength": 8,
+            "description": "At least 8 characters with at least one number, at most 72 bytes, and different from the current password."
+          }
+        }
+      },
+      "ChangePasswordResponse": {
+        "type": "object",
+        "required": ["success", "message", "data"],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "required": ["user", "sessions_revoked"],
+            "properties": {
+              "user": {
+                "$ref": "#/components/schemas/User"
+              },
+              "sessions_revoked": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "How many other devices were signed out."
+              }
+            }
+          }
+        }
+      },
+      "TemporaryPasswordRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["password"],
+        "properties": {
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "description": "At least 8 characters with at least one number, at most 72 bytes. Tell the person it in person or by phone; they replace it at their next sign-in."
+          }
+        }
+      },
+      "TemporaryPasswordResponse": {
+        "type": "object",
+        "required": ["success", "message", "data"],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "required": ["sessions_revoked"],
+            "properties": {
+              "sessions_revoked": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "How many of the account's sessions were ended."
+              }
+            }
+          }
+        }
       }
     },
     "responses": {
@@ -13011,7 +13804,7 @@
         }
       },
       "Forbidden": {
-        "description": "Account is disabled or lacks a required permission.",
+        "description": "Account is disabled, lacks a required permission, or must change its password first (`error.code` = `password_change_required`; see User.must_change_password).",
         "content": {
           "application/json": {
             "schema": {

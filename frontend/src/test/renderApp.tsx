@@ -51,6 +51,7 @@ export const testSession: Session = {
     permissions: ADMIN_PERMISSIONS,
     roleNames: ['admin'],
     store_id: null,
+    must_change_password: false,
   },
 };
 

@@ -49,6 +49,10 @@ type Order struct {
 	// Unrequested marks stock the warehouse sent to the district without an order: it was created
 	// dispatched, and the district receives it like any other shipment.
 	Unrequested bool `json:"unrequested"`
+	// DispatchedAt and ReceivedAt are when the order left the warehouse and when the district received
+	// it, from its history. Only the list and GET /orders/{id} carry them; a workflow step's reply does not.
+	DispatchedAt *time.Time `json:"dispatched_at,omitempty"`
+	ReceivedAt   *time.Time `json:"received_at,omitempty"`
 }
 
 type scope struct {
@@ -79,16 +83,33 @@ ordered_from_store_id, unit_of_measure_id, comment, created_at, updated_at,
 hot_spot_id, parent_order_id, rider_id, quantity_received, discrepancy_note, delivery_note, quantity_approved,
 condom_category, rejection_reason, waybill_number, vehicle_registration, driver_name, driver_phone, unrequested`
 
+// shipmentColumns follow columns in a SELECT FROM orders: when the order was dispatched and received.
+const shipmentColumns = `,
+	(SELECT max(e.created_at) FROM order_events e WHERE e.order_id = orders.id AND e.status = 'dispatched'),
+	(SELECT max(e.created_at) FROM order_events e WHERE e.order_id = orders.id AND e.status = 'received')`
+
+// scanShipment scans columns followed by shipmentColumns.
+func scanShipment(row pgx.Row) (Order, error) {
+	var order Order
+	err := row.Scan(append(orderFields(&order), &order.DispatchedAt, &order.ReceivedAt)...)
+	return order, err
+}
+
 func scanOrder(row pgx.Row) (Order, error) {
 	var order Order
-	err := row.Scan(&order.ID, &order.CondomID, &order.QuantityNeeded, &order.QuantityIssued,
+	err := row.Scan(orderFields(&order)...)
+	return order, err
+}
+
+// orderFields are the destinations for columns, in order.
+func orderFields(order *Order) []any {
+	return []any{&order.ID, &order.CondomID, &order.QuantityNeeded, &order.QuantityIssued,
 		&order.Status, &order.Date, &order.OrderedByID, &order.HandledByID,
 		&order.OrderedForStoreID, &order.OrderedFromStoreID, &order.UnitOfMeasureID,
 		&order.Comment, &order.CreatedAt, &order.UpdatedAt, &order.HotSpotID,
 		&order.ParentOrderID, &order.RiderID, &order.QuantityReceived, &order.DiscrepancyNote, &order.DeliveryNote,
 		&order.QuantityApproved, &order.CondomCategory, &order.RejectionReason, &order.WaybillNumber,
-		&order.VehicleRegistration, &order.DriverName, &order.DriverPhone, &order.Unrequested)
-	return order, err
+		&order.VehicleRegistration, &order.DriverName, &order.DriverPhone, &order.Unrequested}
 }
 
 const visibleOrders = `($1::boolean OR $2::uuid IN (ordered_for_store_id, ordered_from_store_id) OR hot_spot_id = $3::uuid OR rider_id = $4::uuid)`
@@ -115,9 +136,9 @@ type OrderFilter struct {
 // MaxSearch is the longest search a list accepts.
 const MaxSearch = 100
 
-// containsPattern is an ILIKE pattern matching text that contains search, with LIKE's own wildcards
+// ContainsPattern is an ILIKE pattern matching text that contains search, with LIKE's own wildcards
 // taken literally; "" for no search.
-func containsPattern(search string) string {
+func ContainsPattern(search string) string {
 	if search == "" {
 		return ""
 	}
@@ -129,7 +150,7 @@ func (r *Repository) list(ctx context.Context, access scope, f OrderFilter, limi
 	if f.Statuses == nil {
 		f.Statuses = []string{}
 	}
-	rows, err := r.db.Query(ctx, `SELECT `+columns+` FROM orders WHERE `+visibleOrders+`
+	rows, err := r.db.Query(ctx, `SELECT `+columns+shipmentColumns+` FROM orders WHERE `+visibleOrders+`
 			AND (cardinality($7::text[]) = 0 OR order_status = ANY($7))
 			AND ($8 = '' OR (hot_spot_id IS NULL AND order_status NOT IN ('pending', 'fulfilled')
 				AND ordered_from_store_id IN (SELECT id FROM stores WHERE store_type = 'national')))
@@ -138,17 +159,17 @@ func (r *Repository) list(ctx context.Context, access scope, f OrderFilter, limi
 			AND ($11 = '' OR ordered_for_store_id IN (SELECT id FROM stores WHERE name ILIKE $11))
 		ORDER BY created_at DESC, id DESC LIMIT $5 OFFSET $6`,
 		access.allStores, access.storeID, access.hotSpotID, access.userID, limit, offset, f.Statuses, f.Type,
-		f.DistrictID, f.WarehouseID, containsPattern(f.Search))
+		f.DistrictID, f.WarehouseID, ContainsPattern(f.Search))
 	if err != nil {
 		return nil, err
 	}
 	return pgx.CollectRows(rows, func(row pgx.CollectableRow) (Order, error) {
-		return scanOrder(row)
+		return scanShipment(row)
 	})
 }
 
 func (r *Repository) get(ctx context.Context, access scope, id string) (Order, error) {
-	return scanOrder(r.db.QueryRow(ctx, `SELECT `+columns+` FROM orders WHERE `+visibleOrders+
+	return scanShipment(r.db.QueryRow(ctx, `SELECT `+columns+shipmentColumns+` FROM orders WHERE `+visibleOrders+
 		` AND id = $5`, access.allStores, access.storeID, access.hotSpotID, access.userID, id))
 }
 

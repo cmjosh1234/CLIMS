@@ -424,7 +424,7 @@ export function DataTable<Row>({
         className,
       )}
     >
-      {!embedded && (isLoading || hasRows || toolbar) ? (
+      {!embedded && (isLoading || hasRows || toolbar || (searchesServer && query !== '')) ? (
         <div
           data-print-hide
           className="bg-muted/15 flex flex-wrap items-center gap-2 border-b px-4 py-3"
@@ -449,7 +449,8 @@ export function DataTable<Row>({
               placeholder={searchPlaceholder}
               autoComplete="off"
               className="bg-card pl-8"
-              disabled={!hasRows}
+              // A server search that found nothing stays editable, so it can be changed or cleared.
+              disabled={!hasRows && !(searchesServer && query !== '')}
             />
           </div>
           <TableFilters
@@ -598,7 +599,8 @@ export function DataTable<Row>({
             <div
               data-slot="table-container"
               className={cn(
-                'relative w-full overflow-x-auto',
+                // A size container, so the empty state can match the visible width (`cqw`).
+                '@container relative w-full overflow-x-auto',
                 isLong && 'max-h-[calc(100dvh-12rem)] min-h-80 overflow-y-auto',
               )}
             >
@@ -696,52 +698,56 @@ export function DataTable<Row>({
                   ) : page.total === 0 ? (
                     <TableRow className="hover:bg-transparent">
                       <TableCell colSpan={columnCount} className="p-0 whitespace-normal">
-                        {embedded ? (
-                          <p className="text-muted-foreground px-4 py-4 text-center text-sm">
-                            {emptyTitle ?? `No ${label.toLowerCase()} yet`}
-                            {emptyDescription ? ` ${emptyDescription}` : null}
-                          </p>
-                        ) : hasRows ? (
-                          <EmptyState
-                            icon={SearchX}
-                            title="No matches"
-                            description={
-                              activeFilters.length > 0
-                                ? `No records match these filters.${more?.hasMore ? ' Filters cover loaded records only. Load more to search further back.' : ' Try removing a filter or changing its value.'}`
-                                : more?.hasMore
-                                  ? `Nothing in the ${formatNumber(all.length)} ${more.noun} loaded so far matches “${searched.trim()}”. Load more to search further back, or clear the search.`
-                                  : `Nothing matches “${searched.trim()}”. Check the spelling or clear the search.`
-                            }
-                            action={
-                              <div className="flex flex-wrap justify-center gap-2">
-                                <Button
-                                  variant="outline"
-                                  onClick={() => {
-                                    clearFilters();
-                                  }}
-                                >
-                                  {activeFilters.length > 0 ? 'Clear filters' : 'Clear search'}
-                                </Button>
-                                {more?.hasMore ? (
+                        {/* Pinned to the visible part of a table wider than its card, so the
+                            message stays centred in view rather than across the scroll width. */}
+                        <div className="sticky left-0 w-[100cqw]">
+                          {embedded ? (
+                            <p className="text-muted-foreground px-4 py-4 text-center text-sm">
+                              {emptyTitle ?? `No ${label.toLowerCase()} yet`}
+                              {emptyDescription ? ` ${emptyDescription}` : null}
+                            </p>
+                          ) : hasRows ? (
+                            <EmptyState
+                              icon={SearchX}
+                              title="No matches"
+                              description={
+                                activeFilters.length > 0
+                                  ? `No records match these filters.${more?.hasMore ? ' Filters cover loaded records only. Load more to search further back.' : ' Try removing a filter or changing its value.'}`
+                                  : more?.hasMore
+                                    ? `Nothing in the ${formatNumber(all.length)} ${more.noun} loaded so far matches “${searched.trim()}”. Load more to search further back, or clear the search.`
+                                    : `Nothing matches “${searched.trim()}”. Check the spelling or clear the search.`
+                              }
+                              action={
+                                <div className="flex flex-wrap justify-center gap-2">
                                   <Button
                                     variant="outline"
-                                    disabled={more.isLoading}
-                                    onClick={more.onLoadMore}
+                                    onClick={() => {
+                                      clearFilters();
+                                    }}
                                   >
-                                    Load more {more.noun}
+                                    {activeFilters.length > 0 ? 'Clear filters' : 'Clear search'}
                                   </Button>
-                                ) : null}
-                              </div>
-                            }
-                          />
-                        ) : (
-                          <EmptyState
-                            icon={Inbox}
-                            title={emptyTitle ?? `No ${label.toLowerCase()} yet`}
-                            description={emptyDescription}
-                            action={emptyAction}
-                          />
-                        )}
+                                  {more?.hasMore ? (
+                                    <Button
+                                      variant="outline"
+                                      disabled={more.isLoading}
+                                      onClick={more.onLoadMore}
+                                    >
+                                      Load more {more.noun}
+                                    </Button>
+                                  ) : null}
+                                </div>
+                              }
+                            />
+                          ) : (
+                            <EmptyState
+                              icon={Inbox}
+                              title={emptyTitle ?? `No ${label.toLowerCase()} yet`}
+                              description={emptyDescription}
+                              action={emptyAction}
+                            />
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ) : (

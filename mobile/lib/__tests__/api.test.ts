@@ -1,12 +1,17 @@
 import { AxiosError, type AxiosAdapter, type InternalAxiosRequestConfig } from "axios";
 import {
+  accountErrorMessage,
   api,
+  changePassword,
   configureAuth,
+  fieldErrors,
   getTokens,
+  isPasswordChangeRequired,
   login,
   loginErrorMessage,
   setTokens,
   tokenClient,
+  updateProfile,
   type StoredTokens,
 } from "../api";
 
@@ -144,5 +149,93 @@ describe("loginErrorMessage", () => {
   });
   it("explains a disabled account", () => {
     expect(loginErrorMessage(err(403))).toMatch(/switched off/);
+  });
+});
+
+describe("own account", () => {
+  const signedIn = () => setTokens(tokensAt(Date.now() + 600_000));
+
+  it("changes the password, leaving out a current password that wasn't asked for", async () => {
+    signedIn();
+    const a = stub(() => ({
+      status: 200,
+      data: { success: true, data: { user: { id: "u" }, sessions_revoked: 2 } },
+    }));
+    api.defaults.adapter = a.adapter;
+    const forced = await changePassword({ new_password: "kampala-2026" });
+    expect(a.seen[0].method).toBe("post");
+    expect(a.seen[0].url).toBe("/auth/password");
+    expect(body(a.seen[0])).toEqual({ new_password: "kampala-2026" });
+    expect(forced.sessions_revoked).toBe(2);
+    await changePassword({ current_password: "old-pass-1", new_password: "kampala-2026" });
+    expect(body(a.seen[1])).toEqual({
+      current_password: "old-pass-1",
+      new_password: "kampala-2026",
+    });
+  });
+
+  it("sends profile changes to PATCH /auth/me", async () => {
+    signedIn();
+    const a = stub(() => ({
+      status: 200,
+      data: { success: true, data: { id: "u", email: "g@x.org" } },
+    }));
+    api.defaults.adapter = a.adapter;
+    const user = await updateProfile({ email: "g@x.org", current_password: "pw-12345" });
+    expect(a.seen[0].method).toBe("patch");
+    expect(a.seen[0].url).toBe("/auth/me");
+    expect(body(a.seen[0])).toEqual({ email: "g@x.org", current_password: "pw-12345" });
+    expect(user.email).toBe("g@x.org");
+  });
+
+  const refused = (status: number, error?: unknown, data?: object) =>
+    new AxiosError("x", String(status), undefined, null, {
+      status,
+      data: data ?? { success: false, message: "validation failed", error },
+    } as never);
+
+  it("reads the per-field messages of a refused change", () => {
+    expect(fieldErrors(refused(422, { new_password: "Include at least one number." }))).toEqual({
+      new_password: "Include at least one number.",
+    });
+    expect(
+      fieldErrors(
+        refused(409, { phone_number: "Another account already uses this phone number." }),
+      ),
+    ).toHaveProperty("phone_number");
+    expect(fieldErrors(refused(422, "a string, not fields"))).toEqual({});
+    expect(fieldErrors(refused(500, { email: "x" }))).toEqual({});
+    expect(fieldErrors(new Error("x"))).toEqual({});
+  });
+
+  it("explains failures no field explains", () => {
+    expect(accountErrorMessage(refused(429))).toMatch(/Wait a minute/);
+    const offline = new AxiosError("Network Error", "ERR_NETWORK");
+    expect(accountErrorMessage(offline)).toMatch(/network/);
+    expect(accountErrorMessage(offline)).toMatch(/offline/);
+  });
+
+  it("asks the session for a new password when the API requires one", async () => {
+    const passwordChangeRequired = jest.fn();
+    configureAuth({ tokensChanged, sessionEnded, passwordChangeRequired });
+    signedIn();
+    const blocked = {
+      success: false,
+      message: "change your password before continuing",
+      error: { code: "password_change_required" },
+    };
+    api.defaults.adapter = stub(() => ({ status: 403, data: blocked })).adapter;
+    const err = await api.get("/orders").catch((e: unknown) => e);
+    expect(isPasswordChangeRequired(err)).toBe(true);
+    expect(passwordChangeRequired).toHaveBeenCalledTimes(1);
+    expect(sessionEnded).not.toHaveBeenCalled();
+
+    // A 403 for a missing permission is not that.
+    api.defaults.adapter = stub(() => ({
+      status: 403,
+      data: { success: false, message: "forbidden" },
+    })).adapter;
+    expect(isPasswordChangeRequired(await api.get("/orders").catch((e: unknown) => e))).toBe(false);
+    expect(passwordChangeRequired).toHaveBeenCalledTimes(1);
   });
 });

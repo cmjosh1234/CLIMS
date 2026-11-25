@@ -161,12 +161,11 @@ export function reportSteps(report: MonthlyReport, live: LiveCheck, now = new Da
 }
 
 /** The workspaces that have report screens, and where their screens are. */
-export type ReportsWorkspace = 'dcfp' | 'warehouse' | 'moh';
+export type ReportsWorkspace = 'dcfp' | 'warehouse';
 
 const base: Record<ReportsWorkspace, string> = {
   dcfp: '/dcfp/reports',
   warehouse: '/warehouse/reports',
-  moh: '/moh/reports',
 };
 
 export const REPORT_PATHS = {

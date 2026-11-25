@@ -4,6 +4,7 @@ import {
   ChartNoAxesColumn,
   Download,
   Ellipsis,
+  FileSpreadsheet,
   ImageDown,
   Maximize2,
   Table2,
@@ -32,6 +33,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { downloadCsvText, downloadName, saveBlob, toCsv } from '@/lib/export/download';
+import type { PageTable } from '@/lib/export/pageData';
 import { formatNumber } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -128,14 +130,26 @@ export function ChartCard({
   const ready = !isLoading && !hasError && !isEmpty;
   const draw = (mode: ChartMode) => (typeof children === 'function' ? children(mode) : children);
 
+  // The chart's figures as a table: its own downloads, and the page's CSV and Excel files read it
+  // from `data-export-table`. Exact values, never the display units of the axis.
+  const data: PageTable = {
+    title,
+    columns: [categoryLabel, ...series.map((item) => item.label)],
+    rows: rows.map((row) => [row.label, ...series.map((item) => row.values[item.key] ?? null)]),
+  };
+
   const downloadCsv = () => {
-    downloadCsvText(
-      toCsv(
-        [categoryLabel, ...series.map((item) => item.label)],
-        rows.map((row) => [row.label, ...series.map((item) => row.values[item.key] ?? null)]),
-      ),
-      title,
-    );
+    downloadCsvText(toCsv(data.columns, data.rows), title);
+  };
+
+  const downloadExcel = async () => {
+    try {
+      const { downloadPageExcel } = await import('@/lib/export/pageData');
+      await downloadPageExcel({ title, subtitle: description, meta: [], tables: [data] });
+    } catch (failure) {
+      console.error('Chart workbook failed', failure);
+      toast.error('Could not create the Excel file. Try again.');
+    }
   };
 
   const downloadImage = async () => {
@@ -179,6 +193,7 @@ export function ChartCard({
       ref={cardRef}
       data-visual=""
       data-visual-title={title}
+      data-export-table={isLoading || hasError ? undefined : JSON.stringify(data)}
       aria-busy={isLoading || undefined}
       className={cn('bg-card rounded-card flex min-w-0 flex-col border px-4 py-3', className)}
     >
@@ -240,6 +255,10 @@ export function ChartCard({
               <DropdownMenuItem onSelect={downloadCsv}>
                 <Download aria-hidden="true" />
                 Download data (CSV)
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void downloadExcel()}>
+                <FileSpreadsheet aria-hidden="true" />
+                Download data (Excel)
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => void downloadImage()}>
                 <ImageDown aria-hidden="true" />

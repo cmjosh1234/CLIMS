@@ -32,6 +32,8 @@ func RegisterRoutes(router fiber.Router, repo *Repository, jwt, activeUser fiber
 	group.Post("/stockouts/:id/deliveries", rbac.RequirePermission("orders:supply_hotspots"), h.delivery)
 	group.Post("/stockouts/:id/rejection", rbac.RequirePermission("orders:supply_hotspots"), h.rejection)
 	group.Get("/deliveries", rbac.RequirePermission("orders:deliver"), h.myDeliveries)
+	group.Get("/hotspot-deliveries", rbac.RequirePermission("orders:read"), h.distributions)
+	group.Get("/hotspot-deliveries/summary", rbac.RequirePermission("orders:read"), h.distributionSummary)
 	group.Post("/stockouts/:id/acknowledgements", requireAcknowledger, h.acknowledgement)
 	group.Post("/warehouse-requests", rbac.RequirePermission("orders:replenish"), h.warehouseRequest)
 	group.Post("/district-dispatches", rbac.RequirePermission("orders:process"), h.districtDispatch)

@@ -677,11 +677,24 @@ function listHotspots(query: URLSearchParams): Reply {
     ['review_status', (target) => target.review_status],
     ['submitted_by_id', (target) => target.submitted_by_id],
   ];
-  const matching = state.hotspots.filter((target) =>
-    filters.every(([name, read]) => {
-      const wanted = query.get(name);
-      return !wanted || read(target) === wanted;
-    }),
+  // `q` matches the name, village, subcounty, district, manager or phone, ignoring case.
+  const search = (query.get('q') ?? '').trim().toLowerCase();
+  if (search.length > 100) return fail(400, 'q must be at most 100 characters');
+  const matching = state.hotspots.filter(
+    (target) =>
+      filters.every(([name, read]) => {
+        const wanted = query.get(name);
+        return !wanted || read(target) === wanted;
+      }) &&
+      (!search ||
+        [
+          target.name,
+          target.village,
+          target.subcounty?.name,
+          target.district?.name,
+          target.contact_person?.name,
+          target.contact_person?.phone_number,
+        ].some((text) => text?.toLowerCase().includes(search))),
   );
   return ok(matching.slice(offset, offset + limit));
 }

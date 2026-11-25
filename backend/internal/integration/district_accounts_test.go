@@ -165,6 +165,12 @@ func testDistrictAccounts(t *testing.T, pool *pgxpool.Pool,
 	if gotSubcounty == nil || *gotSubcounty != subcounty || gotHotSpot != nil || gotStore != nil {
 		t.Errorf("vht assignment: subcounty %v hotspot %v store %v", gotSubcounty, gotHotSpot, gotStore)
 	}
+	// The DCFP chose the password, so the VHT replaces it at their first sign-in.
+	var mustChange bool
+	scalar(&mustChange, `SELECT must_change_password FROM users WHERE id = $1`, vht)
+	if !mustChange {
+		t.Errorf("a field worker's account should have to change its password")
+	}
 
 	// A hotspot manager runs an active hotspot of the district, and works in its subcounty.
 	fieldError("manager without hotspot", request("POST", "/users/district", body("hotspot manager", nil), focal, 422), "hot_spot_id")
@@ -207,4 +213,18 @@ func testDistrictAccounts(t *testing.T, pool *pgxpool.Pool,
 	exec(`UPDATE users SET password = $2 WHERE id = $1`, vht, cheapPassword(t))
 	request("POST", "/users/district", body("vht", map[string]any{"subcounty_id": subcounty}),
 		login(vhtEmail, "test-password-123", 200), 403)
+
+	// A DCFP gives their own field workers a temporary password, and nobody else.
+	temporary := map[string]any{"password": "temporary-pass-9"}
+	fieldError("weak temporary password", request("PUT", "/users/district/"+vht+"/password",
+		map[string]any{"password": "short"}, focal, 422), "password")
+	request("PUT", "/users/district/"+vht+"/password", temporary, unassigned, 403)
+	request("PUT", "/users/district/"+focalID+"/password", temporary, focal, 404)
+	request("PUT", "/users/district/"+vht+"/password", temporary, focal, 200)
+	scalar(&mustChange, `SELECT must_change_password FROM users WHERE id = $1`, vht)
+	if !mustChange {
+		t.Errorf("a temporary password should have to be changed")
+	}
+	login(vhtEmail, "test-password-123", 401)
+	login(vhtEmail, "temporary-pass-9", 200)
 }

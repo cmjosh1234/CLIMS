@@ -179,6 +179,7 @@ Reach for these before writing markup.
 | A number column as a chart  | `components/charts/DataBar` in a `DataTable` cell                                                                |
 | Report filters              | `features/analytics/FilterBar` with `useReportFilters` (period, district, type… in the address, with chips)      |
 | A PDF of the page           | `components/reports/PdfButton` (reads `data-kpi`, `data-visual`, `data-pdf-table` inside `targetRef`)            |
+| CSV and Excel of the page   | `components/reports/PageDataButtons` (figures, lists, `data-export-table`), where no server export exists        |
 | A figure that is not live   | `SampleBadge` on it, or `SampleDataNotice` for a whole page                                                      |
 
 ### Tables
@@ -226,7 +227,7 @@ primitive only to align it with the tokens above, and keep the edit small so
 Report visuals follow Power BI's and Superset's conventions, so people who use those tools read them
 at once: every chart sits in `ChartCard`, whose header holds the title and description, the legend,
 and the visual's options (table view, focus mode, and a "More options" menu to download the data as
-CSV or the chart as a PNG). A chart has a loading skeleton, an empty state that says why in the
+CSV or Excel, or the chart as a PNG). A chart has a loading skeleton, an empty state that says why in the
 report's words, and an error state that says the figures are not zero. Filters sit in one bar above
 every visual they scope (`FilterBar`), never inside a card.
 
@@ -314,6 +315,12 @@ figures (`StatCard` marks itself `data-kpi`), a picture of every `ChartCard` (`d
 the light theme whatever the viewer's), lists marked `data-pdf-table` (a `TaskList` does), any tables
 passed in (a report's records, on landscape pages when wide), the definitions, and page numbers.
 jsPDF and html-to-image load only when someone downloads.
+
+A report with a server export offers that export's records as CSV and Excel. A page without one
+(Analytics' Overview and Hotspot coverage) offers `PageDataButtons` beside the PDF instead: the
+headline figures, every list marked `data-pdf-table`, and every chart's exact figures (`ChartCard`
+sets `data-export-table` once its data loads; a table can set it too). Excel puts each on its own
+sheet with an "About" sheet for the period and filters; the CSV stacks them under their titles.
 
 ## Print
 

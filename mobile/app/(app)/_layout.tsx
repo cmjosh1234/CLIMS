@@ -10,6 +10,7 @@ import { Skeleton, SkeletonList } from "@/components/m/kit";
 import { useColumn } from "@/hooks/useResponsive";
 import { useSession } from "@/lib/session";
 import { StoreProvider, useStore } from "@/lib/store";
+import { ChooseNewPassword } from "@/screens/account";
 
 const TAB_ROUTES = ["hotspots", "requests", "dashboard", "orders", "deliveries", "history", "me"];
 
@@ -55,6 +56,9 @@ function Signed() {
 export default function AppLayout() {
   const { user } = useSession();
   if (!user) return <Redirect href="/signin" />;
+  // A password someone else chose is replaced before anything else loads: until then the API
+  // refuses every other request, so the store, push registration and tabs wait.
+  if (user.mustChangePassword && !user.demo) return <ChooseNewPassword />;
   return (
     <StoreProvider key={user.id}>
       <Signed />

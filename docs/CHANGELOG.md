@@ -44,6 +44,38 @@ Notable changes to CLIMS. The format follows [Keep a Changelog](https://keepacha
   `GET /api/v1/audit?client_entry_id=` (`/moh/audit?entry=` on the web) shows what the server
   recorded for it. Field users see no log; see [the module](modules/sync-log.md).
 
+- **Administrators see where stock went.** MOH's Distribution screen reads real data instead of
+  sample figures: **To hotspots** lists every product district stores delivered to hotspots, with
+  totals, what each hotspot confirmed receiving and who carried it; **From NMS and JMS** lists what
+  the warehouses sent to district stores, on the way or received. New endpoints:
+  `GET /api/v1/orders/hotspot-deliveries` and `/summary`; orders now carry `dispatched_at` and
+  `received_at`. See [orders](modules/orders.md#where-stock-went-the-distribution-ledger).
+- **A national hotspot list for MOH.** Hotspots gains a List tab beside the map: every district's
+  hotspots, filtered by review status and district and searched on the server
+  (`GET /api/v1/hotspots?q=`), each opening its record.
+
+- **CSV and Excel on every Analytics tab.** Overview and Hotspot coverage, which offered only a PDF,
+  now download as CSV and Excel too: the headline figures, the watch list, every chart's exact figures
+  and the hotspots per district, with the period and filters (Excel puts each table on its own sheet).
+  Every chart's menu downloads its data as Excel as well as CSV.
+
+- **Your profile, and your own password.** The account menu opens **Your profile**: your name,
+  email address and phone number to edit, your password to change, your roles and where you work,
+  and the devices you are signed in on. The field app's Me tab gains Edit details and Change
+  password. Changing the email address or phone number, which sign in, asks for the current
+  password; changing the password signs you out on your other devices. New endpoints:
+  `PATCH /api/v1/auth/me` and `POST /api/v1/auth/password`; see
+  [auth](modules/auth.md#your-own-profile-and-password).
+- **A new account chooses its own password at its first sign-in.** Accounts an administrator or DCFP
+  creates must replace that password before anything else, on the web and in the field app; until
+  then the API answers only `GET /auth/me`, `POST /auth/password` and sign-out (403
+  `password_change_required`). Migration 42 adds `users.must_change_password` and
+  `password_changed_at`; existing accounts keep their passwords.
+- **Temporary passwords.** Administrators (Users & access) and DCFPs (Field users, for their own
+  district's field workers) can give someone who has forgotten their password a temporary one, which
+  signs them out everywhere and is replaced at their next sign-in: `PUT /api/v1/users/{id}/password`
+  and `PUT /api/v1/users/district/{id}/password`. The sign-in page's hint now matches.
+
 ### Fixed
 
 - **Warehouse request report:** a request naming only a category, waiting for the warehouse to pick the
@@ -151,6 +183,13 @@ Notable changes to CLIMS. The format follows [Keep a Changelog](https://keepacha
   DCFP notifications on their screen and marks them read.
 
 ### Removed
+
+- **MOH's Procurement page.** It is gone from the Oversight menu. What NMS and JMS register from
+  suppliers is still in each warehouse's stock and ledger, and old `/moh/procurement` links show
+  "Page not found".
+- **MOH's Reports page.** The monthly report submissions list under Oversight duplicated Analytics
+  and its endpoint is not served, so it only showed an error. It is gone from the MOH menu, and old
+  `/moh/reports` links open Analytics. DCFP and the warehouses still send their monthly reports.
 
 - **Web access for field roles.** VHTs, hotspot managers and delivery agents use only the mobile app.
   Web sign-in, by password or from the portal, refuses an account whose roles open no web workspace

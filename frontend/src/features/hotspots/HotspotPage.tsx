@@ -39,7 +39,8 @@ import { DECISION_TEXT, DecisionDialog } from './HotspotDecisionDialog';
 import { dispenserSummary, hotspotLabel } from './hotspotForm';
 import { useCommentOnHotspot, useHotspot, useHotspotEvents } from './queries';
 
-export default function HotspotPage() {
+/** One hotspot; `backHref` is the list it was opened from (the district's, or MOH's national one). */
+export default function HotspotPage({ backHref = DCFP_PATHS.hotspots }: { backHref?: string }) {
   const { id } = useParams<{ id: string }>();
   const hotspot = useHotspot(id);
   return (
@@ -47,7 +48,7 @@ export default function HotspotPage() {
       query={hotspot}
       layout="detail"
       noun="hotspot"
-      back={{ href: DCFP_PATHS.hotspots, label: 'Back to the hotspots' }}
+      back={{ href: backHref, label: 'Back to the hotspots' }}
     >
       {(data) => <HotspotView hotspot={data} />}
     </RecordView>

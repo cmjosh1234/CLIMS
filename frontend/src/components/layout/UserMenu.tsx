@@ -1,4 +1,5 @@
-import { LogOut, MonitorSmartphone } from 'lucide-react';
+import { LogOut, MonitorSmartphone, UserRound } from 'lucide-react';
+import Link from 'next/link';
 import { useRef, useState } from 'react';
 
 import {
@@ -12,8 +13,9 @@ import {
 import { useCurrentUser, useSignOut } from '@/features/auth/hooks';
 import { SignedInDevicesDialog } from '@/features/auth/SignedInDevicesDialog';
 import { initialsOf } from '@/lib/format';
+import { PROFILE_PATH } from '@/navigation/paths';
 
-/** The signed-in user's identity, where they are signed in, and the way to sign out. */
+/** The signed-in user's identity, their profile, where they are signed in, and the way to sign out. */
 export function UserMenu() {
   const user = useCurrentUser();
   const signOut = useSignOut();
@@ -58,6 +60,12 @@ export function UserMenu() {
             </span>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
+          <DropdownMenuItem asChild>
+            <Link href={PROFILE_PATH}>
+              <UserRound aria-hidden="true" />
+              Your profile
+            </Link>
+          </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => {
               setDevicesOpen(true);

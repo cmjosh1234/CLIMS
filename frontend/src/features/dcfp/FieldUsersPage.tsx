@@ -1,12 +1,14 @@
 'use client';
 
-import { Plus } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { KeyRound, Plus } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
 
 import { DataTable, type DataTableColumn } from '@/components/data-table/DataTable';
+import { RowActions } from '@/components/data-table/RowActions';
 import { PageActions } from '@/components/PageActions';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
+import { TemporaryPasswordDialog } from '@/features/account/TemporaryPasswordDialog';
 import { useCan } from '@/features/auth/queries';
 import { isActive, roleLabel, userStatusLabel } from '@/features/users/access';
 import { RoleBadge } from '@/features/users/RoleBadge';
@@ -21,7 +23,8 @@ import { useFieldUsers } from './queries';
 
 /**
  * The VHTs, hotspot managers and delivery agents in the DCFP's district, with
- * where each works. A DCFP who may create accounts adds new ones here.
+ * where each works. A DCFP who may create accounts adds new ones here, and
+ * gives one who has forgotten their password a temporary one.
  */
 export default function FieldUsersPage() {
   const users = useFieldUsers();
@@ -29,6 +32,9 @@ export default function FieldUsersPage() {
   const readOnly = useReadOnly();
   const canCreate = !readOnly && can('users:district_create');
   const [creating, setCreating] = useState(false);
+  const [resetting, setResetting] = useState<FieldUser | null>(null);
+  // Each row's actions button, so the dialog opened from its menu can hand focus back to it.
+  const actionButtons = useRef(new Map<string, HTMLButtonElement>());
   // A 403 here means the account has no district to list, not a missing permission.
   const noDistrict = users.error ? toApiError(users.error).kind === 'forbidden' : false;
 
@@ -146,7 +152,46 @@ export default function FieldUsersPage() {
             ? 'Add the VHTs, hotspot managers and delivery agents who work in your district.'
             : 'VHTs, hotspot managers and delivery agents in your district appear here.'
         }
+        rowActions={
+          canCreate
+            ? (user) => (
+                <RowActions
+                  label={`Actions for ${userDisplayName(user)}`}
+                  triggerRef={(button) => {
+                    if (button) actionButtons.current.set(user.id, button);
+                    else actionButtons.current.delete(user.id);
+                  }}
+                  actions={[
+                    {
+                      label: 'Set temporary password',
+                      icon: KeyRound,
+                      onSelect: () => {
+                        setResetting(user);
+                      },
+                    },
+                  ]}
+                />
+              )
+            : undefined
+        }
       />
+      {resetting ? (
+        <TemporaryPasswordDialog
+          key={resetting.id}
+          userId={resetting.id}
+          userName={userDisplayName(resetting)}
+          scope="district"
+          onClose={() => {
+            setResetting(null);
+          }}
+          onCloseAutoFocus={(event) => {
+            const button = actionButtons.current.get(resetting.id);
+            if (!button?.isConnected) return;
+            event.preventDefault();
+            button.focus();
+          }}
+        />
+      ) : null}
       {creating ? (
         <FieldUserFormDialog
           onClose={() => {

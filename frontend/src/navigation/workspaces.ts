@@ -9,7 +9,6 @@ import {
   MapPin,
   Package,
   ShieldCheck,
-  ShoppingCart,
   Store,
   Tags,
   Truck,
@@ -170,24 +169,7 @@ export const workspaces: readonly Workspace[] = [
               { path: '/moh/orders/warehouse/[id]', label: 'District order', layout: 'detail' },
             ],
           },
-          {
-            id: 'reports',
-            label: 'Reports',
-            icon: ClipboardCheck,
-            pages: [
-              {
-                path: '/moh/reports',
-                tab: 'Submissions',
-                title: 'Reports',
-                description:
-                  'Monthly reports sent to the MOH server by hotspots, VHTs, districts and warehouses.',
-                layout: 'table',
-              },
-            ],
-            details: [{ path: '/moh/reports/[id]', label: 'Report', layout: 'detail' }],
-          },
-          // Distribution, procurement and the hotspot map predate the prototype, which has no
-          // equivalent for them. They stay until it is decided whether MOH still needs them.
+          // Where stock went: district stores to hotspots, and NMS and JMS to district stores.
           {
             id: 'distribution',
             label: 'Distribution',
@@ -195,32 +177,38 @@ export const workspaces: readonly Workspace[] = [
             pages: [
               {
                 path: '/moh/distribution',
-                tab: 'Distribution',
+                tab: 'To hotspots',
                 title: 'Condom distribution',
-                description: 'Condoms distributed to hotspots, by type, location and distributor.',
+                description:
+                  'Condoms district stores delivered to hotspots, by product, place and who carried them, and what each hotspot confirmed receiving. Read-only.',
                 layout: 'table',
+                permission: 'orders:read',
               },
-            ],
-          },
-          {
-            id: 'procurement',
-            label: 'Procurement',
-            icon: ShoppingCart,
-            pages: [
               {
-                path: '/moh/procurement',
-                tab: 'Procurement',
-                title: 'Procurement',
-                description: 'Condom stock procured through each supply channel.',
-                layout: 'dashboard',
+                path: '/moh/distribution/warehouses',
+                tab: 'From NMS and JMS',
+                title: 'Condom distribution',
+                description:
+                  'Stock NMS and JMS sent to district stores, on the way or received, including stock sent before a district ordered. Read-only.',
+                layout: 'table',
+                permission: 'orders:read',
               },
             ],
           },
           {
-            id: 'hotspot-map',
-            label: 'Hotspot map',
+            id: 'hotspots',
+            label: 'Hotspots',
             icon: MapPin,
             pages: [
+              {
+                path: '/moh/hotspots',
+                tab: 'List',
+                title: 'Hotspots',
+                description:
+                  'Every hotspot in the country, or in the district you choose, with its review status and manager.',
+                layout: 'table',
+                permission: 'hotspots:read',
+              },
               {
                 path: '/moh/hotspot-map',
                 tab: 'Map',
@@ -229,6 +217,7 @@ export const workspaces: readonly Workspace[] = [
                 layout: 'dashboard',
               },
             ],
+            details: [{ path: '/moh/hotspots/[id]', label: 'Hotspot', layout: 'detail' }],
           },
         ],
       },

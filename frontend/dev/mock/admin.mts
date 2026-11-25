@@ -818,7 +818,45 @@ function seedUserSessions(users: readonly User[], dataset: string): Map<string, 
   return sessions;
 }
 
+/** The mock's signed-in person: what `PATCH /auth/me` and `POST /auth/password` change. */
+interface Me {
+  firstname: string;
+  lastname: string;
+  email: string | null;
+  phone_number: string;
+  must_change_password: boolean;
+  password_changed_at: string | null;
+}
+
+/**
+ * `MOCK_MUST_CHANGE_PASSWORD=1` signs in as an account an administrator just
+ * created, which must choose its own password first. `worst` is an imported
+ * account: no last name, no email address and an old landline.
+ */
+function seedMe(dataset: string): Me {
+  const mustChange = process.env.MOCK_MUST_CHANGE_PASSWORD === '1';
+  if (dataset === 'worst') {
+    return {
+      firstname: 'Nakimuli-Kabasinguzi',
+      lastname: '',
+      email: null,
+      phone_number: '0414 123456',
+      must_change_password: mustChange,
+      password_changed_at: null,
+    };
+  }
+  return {
+    firstname: 'Sarah',
+    lastname: 'Nakato',
+    email: 'sarah.nakato@health.go.ug',
+    phone_number: '+256772418903',
+    must_change_password: mustChange,
+    password_changed_at: mustChange ? null : '2026-09-14T08:12:00.000Z',
+  };
+}
+
 const state = {
+  me: seedMe('demo'),
   roles: seedRoles(),
   users: [] as User[],
   mySessions: [] as DeviceSession[],
@@ -834,6 +872,7 @@ const state = {
 };
 
 export function seedAdmin(dataset: string): void {
+  state.me = seedMe(dataset);
   state.roles = seedRoles();
   state.users = seedUsers(dataset);
   state.mySessions = seedMySessions(dataset);
@@ -1026,6 +1065,8 @@ function handleUsers(
   if (method === 'GET' && !sub)
     return user ? ok(userView(user)) : fail(404, 'user or role not found');
   if (!user) return fail(404, 'user or role not found');
+
+  if (sub === 'password' && method === 'PUT') return setTemporaryPassword(user, body);
 
   if (sub === 'roles' && method === 'PUT') {
     const roleIds = body.role_ids;
@@ -1557,33 +1598,220 @@ function handleCatalogue(
  */
 export function signedInUser(email: string | null = null) {
   const admin = state.roles.find((role) => role.name === 'admin') ?? null;
+  // `MOCK_STORE=Wakiso` assigns that district's store, for the screens that act from one
+  // (sending stock to a hotspot); by default the user works across stores.
+  const storeId = process.env.MOCK_STORE ? mockDistrictStoreId(process.env.MOCK_STORE) : null;
+  const store = MOCK_STORES.find((candidate) => candidate.id === storeId) ?? null;
+  const { me } = state;
   return {
     id: 1,
     username: 'sarah.nakato',
-    firstname: 'Sarah',
-    lastname: 'Nakato',
-    email,
+    firstname: me.firstname,
+    lastname: me.lastname,
+    first_name: me.firstname,
+    last_name: me.lastname,
+    email: email ?? me.email,
+    phone_number: me.phone_number,
     status: 'active',
     role: admin,
     roles: admin ? [admin] : [],
-    // `MOCK_STORE=Wakiso` assigns that district's store, for the screens that act from one
-    // (sending stock to a hotspot); by default the user works across stores.
-    ...(process.env.MOCK_STORE ? { store_id: mockDistrictStoreId(process.env.MOCK_STORE) } : {}),
+    created_at: '2025-03-03T07:45:00.000Z',
+    last_login_at: minutesAgo(3),
+    login_count: 214,
+    active_sessions: state.mySessions.filter((session) => !session.revoked_at).length,
+    must_change_password: me.must_change_password,
+    password_changed_at: me.password_changed_at,
+    location: null,
+    organisation_unit: null,
+    hot_spot: null,
+    subcounty: null,
+    ...(storeId ? { store_id: storeId } : {}),
+    store: store
+      ? {
+          id: store.id,
+          code: store.code,
+          name: store.name,
+          store_type: store.store_type,
+          district_name: store.district_name,
+        }
+      : null,
   };
 }
 
+const PROFILE_KEYS = new Set([
+  'first_name',
+  'last_name',
+  'email',
+  'phone_number',
+  'current_password',
+]);
+
+/** Mirrors the Go API's `users.PasswordProblem`. */
+function passwordProblem(password: unknown): string | null {
+  if (typeof password !== 'string' || password === '') return 'This field is required.';
+  if (Array.from(password).length < 8) return 'Use at least 8 characters.';
+  if (new TextEncoder().encode(password).length > 72)
+    return 'Use a shorter password: at most 72 bytes.';
+  if (!/\d/.test(password)) return 'Include at least one number.';
+  return null;
+}
+
+const phoneKey = (phone: string) => phone.replace(/[\s()-]/g, '').replace(/^\+256/, '0');
+
+/** `PATCH /auth/me`, as the Go API checks it. The current password "wrong" is refused. */
+function updateMe(body: Body): Reply {
+  const unknown = Object.keys(body).find((key) => !PROFILE_KEYS.has(key));
+  if (unknown) return fail(400, 'invalid request body', { [unknown]: 'unknown field' });
+  const { me } = state;
+  const problems: Record<string, string> = {};
+  const next = { ...me };
+  for (const [field, key, missing] of [
+    ['first_name', 'firstname', 'Enter your first name.'],
+    ['last_name', 'lastname', 'Enter your last name.'],
+  ] as const) {
+    if (typeof body[field] !== 'string') continue;
+    const value = body[field].trim();
+    if (value === me[key]) continue;
+    if (value === '') problems[field] = missing;
+    else if (Array.from(value).length > 20) problems[field] = 'Use at most 20 characters.';
+    else next[key] = value;
+  }
+  let changesSignIn = false;
+  if (typeof body.email === 'string') {
+    const email = body.email.trim().toLowerCase();
+    if (email !== (me.email ?? '')) {
+      if (email === '') problems.email = 'Enter your email address.';
+      else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email))
+        problems.email = 'Enter a valid email address, e.g. name@example.org.';
+      else if (state.users.some((user) => user.email.toLowerCase() === email))
+        return fail(409, 'that email address or phone number belongs to another account', {
+          email: 'Another account already uses this email address.',
+        });
+      else {
+        next.email = email;
+        changesSignIn = true;
+      }
+    }
+  }
+  if (typeof body.phone_number === 'string') {
+    const phone = body.phone_number.replace(/[\s()-]/g, '');
+    if (phoneKey(phone) !== phoneKey(me.phone_number)) {
+      if (phone !== '' && !/^\+?\d{9,15}$/.test(phone))
+        problems.phone_number = 'Use 9 to 15 digits with an optional leading +.';
+      else {
+        next.phone_number = phone;
+        changesSignIn = true;
+      }
+    }
+  }
+  if (Object.keys(problems).length === 0 && changesSignIn) {
+    if (!body.current_password)
+      problems.current_password =
+        'Enter your current password to change your email address or phone number.';
+    else if (body.current_password === 'wrong')
+      problems.current_password = 'That is not your current password.';
+  }
+  if (Object.keys(problems).length > 0) return fail(422, 'validation failed', problems);
+  state.me = next;
+  record('user.profile_updated', { type: 'user', id: ACTOR.id });
+  return ok(signedInUser());
+}
+
+/** `POST /auth/password`. The current password "wrong" is refused. */
+function changeMyPassword(body: Body): Reply {
+  const problems: Record<string, string> = {};
+  const problem = passwordProblem(body.new_password);
+  if (problem) problems.new_password = problem;
+  const current = typeof body.current_password === 'string' ? body.current_password : '';
+  if (!state.me.must_change_password || current !== '') {
+    if (current === '') problems.current_password = 'Enter your current password.';
+    else if (current === 'wrong') problems.current_password = 'That is not your current password.';
+  }
+  if (Object.keys(problems).length === 0 && current !== '' && body.new_password === current)
+    problems.new_password = 'Choose a password different from your current one.';
+  if (Object.keys(problems).length > 0) return fail(422, 'validation failed', problems);
+  const now = new Date().toISOString();
+  let revoked = 0;
+  for (const session of state.mySessions) {
+    if (session.current || session.revoked_at || session.expires_at <= now) continue;
+    session.revoked_at = now;
+    revoked += 1;
+  }
+  const required = state.me.must_change_password;
+  state.me = { ...state.me, must_change_password: false, password_changed_at: now };
+  record(
+    'auth.password_changed',
+    { type: 'user', id: ACTOR.id },
+    {
+      details: { sessions_revoked: revoked, required },
+    },
+  );
+  return ok({ user: signedInUser(), sessions_revoked: revoked });
+}
+
+/** Sets a temporary password on `user`, signing it out everywhere, as `PUT /users/:id/password` does. */
+function setTemporaryPassword(user: User, body: Body): Reply {
+  const problem = passwordProblem(body.password);
+  if (problem) return fail(422, 'validation failed', { password: problem });
+  const now = new Date().toISOString();
+  let revoked = 0;
+  for (const session of state.userSessions.get(user.id) ?? []) {
+    if (session.revoked_at || session.expires_at <= now) continue;
+    session.revoked_at = now;
+    revoked += 1;
+  }
+  record(
+    'user.password_reset',
+    { type: 'user', id: user.id },
+    {
+      details: { sessions_revoked: revoked },
+    },
+  );
+  return ok({ sessions_revoked: revoked });
+}
+
+const FIELD_ROLES = new Set(['vht', 'hotspot manager', 'delivery agent']);
+
 /**
- * `GET /auth/me`, `GET /auth/sessions` and `DELETE /auth/sessions/:id`; null for any other path.
+ * `GET /users/district` and `PUT /users/district/:id/password`: the field
+ * workers a DCFP looks after. The mock's district holds every field worker.
+ */
+function handleDistrictUsers(
+  method: string,
+  id: string | undefined,
+  sub: string | undefined,
+  body: Body,
+): Reply {
+  const fieldWorkers = state.users.filter((user) =>
+    state.roles.some((role) => user.role_ids.includes(role.id) && FIELD_ROLES.has(role.name)),
+  );
+  if (!id) {
+    if (method !== 'GET') return fail(405, 'Method not allowed');
+    return ok({ users: fieldWorkers.map(userView) });
+  }
+  if (sub !== 'password' || method !== 'PUT') return fail(405, 'Method not allowed');
+  if (!isUuid(id)) return fail(400, 'invalid id');
+  const user = fieldWorkers.find((candidate) => candidate.id === id);
+  if (!user) return fail(404, 'user not found in your district');
+  return setTemporaryPassword(user, body);
+}
+
+/**
+ * `GET /auth/me`, `PATCH /auth/me`, `POST /auth/password`, `GET /auth/sessions` and
+ * `DELETE /auth/sessions/:id`; null for any other path.
  * `userAgent` is the request's, recorded on the current session as the server does at sign-in.
  */
 export function handleAuth(
   method: string,
   parts: readonly string[],
   userAgent: string | null = null,
+  body: Body = {},
 ): Reply | null {
   const [resource, first, second] = parts;
   if (resource !== 'auth') return null;
   if (first === 'me' && method === 'GET') return ok(signedInUser());
+  if (first === 'me' && method === 'PATCH') return updateMe(body);
+  if (first === 'password' && method === 'POST') return changeMyPassword(body);
   if (first !== 'sessions') return null;
   const now = new Date().toISOString();
   if (!second) {
@@ -1702,6 +1930,7 @@ export function handleAdmin(
   if (!RESOURCES.has(resource)) return null;
   switch (resource) {
     case 'users':
+      if (first === 'district') return handleDistrictUsers(method, second, parts[3], body);
       return handleUsers(method, first, second, body, query);
     case 'roles':
       return handleRoles(method, first, second, body);

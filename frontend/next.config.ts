@@ -47,6 +47,9 @@ const nextConfig: NextConfig = {
       { source: '/', destination: '/moh', permanent: false },
       // MOH's Analytics became its home page; old report links (`?view=` and filters) keep working.
       { source: '/moh/programme-reports', destination: '/moh', permanent: false },
+      // MOH's monthly report submissions duplicated Analytics and were retired; DCFP and the
+      // warehouses still send their monthly reports from their own workspaces.
+      { source: '/moh/reports/:path*', destination: '/moh', permanent: false },
       // Registering stock moved into a panel on the stock page; the query (`?store=`) is kept.
       {
         source: '/warehouse/stock/receive',

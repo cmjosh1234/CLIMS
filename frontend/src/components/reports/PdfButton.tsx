@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { useCurrentUser } from '@/features/auth/hooks';
 import { downloadName, saveBlob } from '@/lib/export/download';
+import { readFilters, readKpis } from '@/lib/export/pageData';
 import type { PdfTable } from '@/lib/export/reportPdf';
 
 interface PdfButtonProps {
@@ -28,11 +29,6 @@ interface PdfButtonProps {
 
 /** Reads the figures, charts and filters a page shows, without each page wiring them up. */
 function collect(target: HTMLElement) {
-  const kpis = [...target.querySelectorAll<HTMLElement>('[data-kpi]')].map((node) => ({
-    label: node.dataset.kpiLabel ?? '',
-    value: node.dataset.kpiValue ?? '',
-    detail: node.dataset.kpiDetail || undefined,
-  }));
   const visuals = [...target.querySelectorAll<HTMLElement>('[data-visual]')];
   // Lists that print as tables (a dashboard's watch list), in page order.
   const tables = [...target.querySelectorAll<HTMLElement>('[data-pdf-table]')].flatMap((node) => {
@@ -42,14 +38,7 @@ function collect(target: HTMLElement) {
       return [];
     }
   });
-  const filters: [string, string][] = [];
-  const period = document.querySelector<HTMLElement>('[data-filter-period]')?.dataset.filterPeriod;
-  if (period) filters.push(['Period', period]);
-  const chips = [...document.querySelectorAll<HTMLElement>('[data-filter-chip]')]
-    .filter((node) => node.dataset.filterChip !== 'Period')
-    .map((node) => `${node.dataset.filterChip}: ${node.dataset.filterValue ?? ''}`);
-  filters.push(['Filters', chips.length > 0 ? chips.join(' · ') : 'None (everything you can see)']);
-  return { kpis: kpis.filter((kpi) => kpi.value), visuals, filters, tables };
+  return { kpis: readKpis(target), visuals, filters: readFilters(), tables };
 }
 
 /**

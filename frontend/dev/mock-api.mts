@@ -13,7 +13,8 @@
  * gateway does for the real API, so the /api/v1 prefix is accepted and ignored.
  *
  * Sign in with any email, username or phone; the password "wrong" is rejected, anything else
- * is accepted. MOCK_FAIL=<resource> (e.g. `users`) makes that resource return
+ * is accepted. MOCK_MUST_CHANGE_PASSWORD=1 signs in as a new account that must choose its own
+ * password first. MOCK_FAIL=<resource> (e.g. `users`) makes that resource return
  * a 500 so error states can be looked at. MOCK_DELAY sets latency in ms.
  *
  * Replies use the Go API's shapes. Data lives in memory and resets on
@@ -189,7 +190,12 @@ async function route(request: IncomingMessage): Promise<Reply> {
     return reply(200, { success: true, message: 'logged out', data: null });
   }
   // The signed-in user and their devices, in the Go API's shapes.
-  const auth = handleAuth(request.method ?? 'GET', parts, request.headers['user-agent'] ?? null);
+  const auth = handleAuth(
+    request.method ?? 'GET',
+    parts,
+    request.headers['user-agent'] ?? null,
+    body,
+  );
   if (auth) return auth;
   // Users, roles and permissions in the Go API's shapes; answered before the legacy lookups.
   const admin = handleAdmin(

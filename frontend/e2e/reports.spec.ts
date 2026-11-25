@@ -68,36 +68,3 @@ test('saves a draft and keeps the figures', async ({ page }) => {
     page.getByRole('textbox', { name: 'Male condoms, Closing balance', exact: true }),
   ).toHaveValue('2600');
 });
-
-test.describe('MOH', () => {
-  /*
-   * October 2026 as MOH sees it: Nansana Taxi Park (RPT-2610-HS0198) has sent its report and MOH
-   * has not opened it yet; Kireka Truck Stop Lodge (Agnes Namata) has not sent one.
-   */
-
-  test('opening a new report marks it reviewed', async ({ page }) => {
-    await open(page, '/moh/reports', 'Reports');
-    const row = page.getByRole('row', { name: /Nansana Taxi Park/ });
-    await expect(row).toContainText('New');
-    await row.getByRole('link', { name: 'Nansana Taxi Park' }).click();
-
-    await expect(page.getByRole('heading', { level: 1, name: 'Report' })).toBeVisible();
-    await expect(
-      page.getByRole('definition').filter({ hasText: /^Dr\. Ruth Akello · Today, / }),
-    ).toBeVisible();
-
-    await page.getByRole('link', { name: 'Back to Reports', exact: true }).click();
-    await expect(row).toContainText('Reviewed');
-    await page.reload();
-    await expect(row).toContainText('Reviewed');
-  });
-
-  test('reminds a reporter whose report has not been sent', async ({ page }) => {
-    await open(page, '/moh/reports', 'Reports');
-    await page.getByRole('link', { name: /^Not sent/ }).click();
-    await page.getByRole('button', { name: 'Actions for Kireka Truck Stop Lodge' }).click();
-    await page.getByRole('menuitem', { name: 'Remind Agnes Namata' }).click();
-
-    await expectToast(page, 'Reminder sent to Agnes Namata.');
-  });
-});

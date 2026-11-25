@@ -154,6 +154,7 @@ describe('getCurrentUser', () => {
       permissions: ['hotspots:submit', 'orders:read'],
       roleNames: ['dfcp', 'vht'],
       store_id: '5d1c2b3a-0000-4000-8000-000000000001',
+      must_change_password: false,
     });
   });
 

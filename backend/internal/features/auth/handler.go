@@ -24,11 +24,14 @@ type Handler struct {
 	JWTSecret string
 	// Sessions serves sign-out and a user's own session list.
 	Sessions *users.Handler
-	Audit    audit.Auditor
+	// Account serves the signed-in user's own profile and password.
+	Account *users.Handler
+	Audit   audit.Auditor
 }
 
 func NewHandler(repo *users.Repository, service *users.Service, secret string, auditor audit.Auditor) *Handler {
-	return &Handler{Repo: repo, Service: service, JWTSecret: secret, Sessions: users.NewHandler(repo, service), Audit: auditor}
+	own := users.NewHandler(repo, service)
+	return &Handler{Repo: repo, Service: service, JWTSecret: secret, Sessions: own, Account: own, Audit: auditor}
 }
 
 // loginFailed audits a refused login with the identifier that was typed and, when it

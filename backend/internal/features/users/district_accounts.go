@@ -177,6 +177,8 @@ func (h *Handler) CreateDistrictUser(c fiber.Ctx) error {
 	input := req.AccountInput
 	input.Assignment = FacilityAssignment{}
 	input.StoreID, input.SubcountyID = nil, nil
+	// The DCFP chose this password, so the field worker replaces it at their first sign-in.
+	input.MustChangePassword = true
 	switch req.Role {
 	case "vht":
 		if req.SubcountyID == nil {

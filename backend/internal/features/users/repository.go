@@ -59,10 +59,12 @@ func (r *Repository) CreateUserWithRoles(ctx context.Context, req AccountInput, 
 	}
 	var id string
 	err = tx.QueryRow(ctx, `INSERT INTO users
-		(username,email,password,firstname,lastname,phone_number,location,organisation_unit_id,hot_spot_id,store_id,subcounty_id,status,created_at,updated_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'active',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) RETURNING id`,
+		(username,email,password,firstname,lastname,phone_number,location,organisation_unit_id,hot_spot_id,store_id,subcounty_id,
+		 must_change_password,status,created_at,updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'active',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP) RETURNING id`,
 		req.Username, req.Email, passwordHash, req.FirstName, req.LastName, req.Phone,
-		req.Location, req.Assignment.OrganisationUnitID, req.Assignment.HotSpotID, req.StoreID, req.SubcountyID).Scan(&id)
+		req.Location, req.Assignment.OrganisationUnitID, req.Assignment.HotSpotID, req.StoreID, req.SubcountyID,
+		req.MustChangePassword).Scan(&id)
 	if err != nil {
 		return "", err
 	}
@@ -89,7 +91,7 @@ func (r *Repository) CreateUserWithRoles(ctx context.Context, req AccountInput, 
 
 const userSelect = `SELECT u.id,u.username,COALESCE(u.email,''),u.password,u.firstname,u.lastname,u.phone_number,u.status,
 	u.location,u.organisation_unit_id,u.hot_spot_id,u.subcounty_id,u.store_id,u.created_at,u.updated_at,
-	u.last_login_at,u.login_count,
+	u.last_login_at,u.login_count,u.must_change_password,u.password_changed_at,
 	(SELECT count(*) FROM user_sessions s
 		WHERE s.user_id = u.id AND s.revoked_at IS NULL AND s.expires_at > CURRENT_TIMESTAMP),
 	COALESCE((
@@ -124,7 +126,8 @@ func scanUser(row pgx.Row) (*User, error) {
 	var u User
 	err := row.Scan(&u.ID, &u.Username, &u.Email, &u.PasswordHash, &u.FirstName, &u.LastName, &u.Phone, &u.Status,
 		&u.Location, &u.OrganisationUnitID, &u.HotSpotID, &u.SubcountyID, &u.StoreID,
-		&u.CreatedAt, &u.UpdatedAt, &u.LastLoginAt, &u.LoginCount, &u.ActiveSessions, &u.Roles,
+		&u.CreatedAt, &u.UpdatedAt, &u.LastLoginAt, &u.LoginCount, &u.MustChangePassword, &u.PasswordChangedAt,
+		&u.ActiveSessions, &u.Roles,
 		&u.OrganisationUnit, &u.HotSpot, &u.Subcounty, &u.Store)
 	if err != nil {
 		return nil, err

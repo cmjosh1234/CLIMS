@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
@@ -6,7 +6,6 @@ import { testRouter } from '@/test/navigation';
 import { renderApp } from '@/test/renderApp';
 import { aReport, aSentReport } from '@/test/reportFixtures';
 
-import MohReportPage from './MohReportPage';
 import ReporterReportsPage from './ReporterReportsPage';
 
 const reports = [
@@ -58,31 +57,5 @@ describe('ReporterReportsPage', () => {
       replies: [{ status: 200, body: [] }],
     });
     expect(await screen.findByText('No reports yet')).toBeInTheDocument();
-  });
-});
-
-describe('MohReportPage', () => {
-  it('shows a sent report read-only and records that MOH has reviewed it', async () => {
-    const { requests } = renderApp(<MohReportPage />, {
-      route: '/moh/reports/RPT-2610-WAKISO',
-      signedIn: true,
-      replies: [
-        (request) =>
-          request.method === 'POST'
-            ? { status: 200, body: { success: true, data: null } }
-            : { status: 200, body: aSentReport({ comment: 'Counted on the 31st.' }) },
-      ],
-    });
-
-    expect(
-      await screen.findByText(/^Received/, { selector: '[data-slot="alert-title"]' }),
-    ).toBeInTheDocument();
-    expect(screen.getByText('Counted on the 31st.')).toBeInTheDocument();
-    expect(screen.queryAllByRole('textbox')).toHaveLength(0);
-    await waitFor(() => {
-      expect(requests.filter((request) => request.method === 'POST').map((r) => r.url)).toEqual([
-        '/monthly-reports/RPT-2610-WAKISO/review',
-      ]);
-    });
   });
 });

@@ -22,6 +22,7 @@ const session: Session = {
     permissions: null,
     roleNames: ['dfcp'],
     store_id: null,
+    must_change_password: false,
   },
 };
 

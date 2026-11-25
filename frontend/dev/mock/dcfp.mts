@@ -1256,7 +1256,114 @@ function listOrders(query: URLSearchParams, page: <T>(items: T[]) => T[]): Reply
       (!warehouse || order.ordered_from_store_id === warehouse) &&
       (!search || storeName(order.ordered_for_store_id).includes(search)),
   );
-  return ok(page(rows));
+  return ok(page(rows).map(withShipment));
+}
+
+/** When an order last reached `status`, from its history; null if it never did. */
+function reachedAt(orderId: string, status: Status): string | null {
+  const times = state.events
+    .filter((event) => event.order_id === orderId && event.status === status)
+    .map((event) => event.created_at)
+    .sort();
+  return times.at(-1) ?? null;
+}
+
+/** An order as the list and `GET /orders/:id` give it: with when it was dispatched and received. */
+const withShipment = (order: Order) => ({
+  ...order,
+  dispatched_at: reachedAt(order.id, 'dispatched'),
+  received_at: reachedAt(order.id, 'received'),
+});
+
+type DistributionLine = ReturnType<typeof distributionLines>[number];
+
+/** Every delivery line to a hotspot, newest first, as `GET /orders/hotspot-deliveries` gives them. */
+function distributionLines() {
+  const storeName = (id: string) => MOCK_STORES.find((store) => store.id === id)?.name ?? '';
+  return state.reports
+    .flatMap((r) =>
+      (state.deliveries.get(r.id) ?? []).flatMap((delivery) =>
+        delivery.lines.map((line) => ({
+          id: line.id,
+          delivery_id: delivery.id,
+          stockout_report_id: r.id,
+          delivered_at: delivery.created_at,
+          hot_spot_id: r.hot_spot_id,
+          hot_spot: r.hot_spot.name,
+          village: r.hot_spot.village,
+          subcounty: r.hot_spot.subcounty,
+          district_id: districtOfStore(r.district_store_id),
+          district: r.hot_spot.district,
+          district_store_id: r.district_store_id,
+          district_store: storeName(r.district_store_id),
+          category: line.category,
+          product: line.product,
+          unit: line.quantity === line.pieces ? 'Piece' : 'Box',
+          quantity: line.quantity,
+          pieces: line.pieces,
+          sent_by: 'Grace Nakato',
+          rider: delivery.rider?.name ?? null,
+          rider_phone: delivery.rider?.phone ?? null,
+          acknowledged_pieces: line.acknowledged_pieces,
+          acknowledged_at: line.acknowledged_at,
+        })),
+      ),
+    )
+    .sort((a, b) => b.delivered_at.localeCompare(a.delivered_at));
+}
+
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * The delivery lines `GET /orders/hotspot-deliveries` and its `/summary` cover: filtered by
+ * `district_id`, `category`, `from` and `to` (dates, both inclusive) and `q`; or a 400 reply.
+ */
+function filteredDistributions(query: URLSearchParams): DistributionLine[] | Reply {
+  const district = uuidParam(query, 'district_id');
+  if (district === null) return fail(400, 'district_id must be a UUID');
+  const category = query.get('category');
+  if (category && category !== 'male' && category !== 'female') {
+    return fail(400, 'category must be male or female');
+  }
+  const from = query.get('from');
+  const to = query.get('to');
+  for (const [name, value] of [
+    ['from', from],
+    ['to', to],
+  ] as const) {
+    if (value && !DATE.test(value)) return fail(400, `${name} must be a YYYY-MM-DD date`);
+  }
+  if (from && to && from > to) return fail(400, 'from must not be after to');
+  const search = searchParam(query);
+  if (search === null) return fail(400, 'q must be at most 100 characters');
+  const day = (at: string) => at.slice(0, 10);
+  return distributionLines().filter(
+    (line) =>
+      (!district || line.district_id === district) &&
+      (!category || line.category === category) &&
+      (!from || day(line.delivered_at) >= from) &&
+      (!to || day(line.delivered_at) <= to) &&
+      (!search ||
+        [line.hot_spot, line.village, line.subcounty, line.district, line.product, line.rider].some(
+          (text) => text?.toLowerCase().includes(search),
+        )),
+  );
+}
+
+function distributionSummary(query: URLSearchParams): Reply {
+  const lines = filteredDistributions(query);
+  if (!Array.isArray(lines)) return lines;
+  const sum = (pick: (line: DistributionLine) => number) =>
+    lines.reduce((total, line) => total + pick(line), 0);
+  return ok({
+    deliveries: new Set(lines.map((line) => line.delivery_id)).size,
+    hotspots: new Set(lines.map((line) => line.hot_spot_id)).size,
+    pieces: sum((line) => line.pieces),
+    male_pieces: sum((line) => (line.category === 'male' ? line.pieces : 0)),
+    female_pieces: sum((line) => (line.category === 'female' ? line.pieces : 0)),
+    acknowledged_pieces: sum((line) => line.acknowledged_pieces ?? 0),
+    unacknowledged_lines: lines.filter((line) => line.acknowledged_at === null).length,
+  });
 }
 
 /** Answers `/orders…` and `/notifications…`, or returns null for any other path. */
@@ -1291,11 +1398,17 @@ export function handleDcfp(
     if (method === 'GET' && action === 'riders') return ok(riders());
     return fail(405, 'Method not allowed');
   }
+  if (target === 'hotspot-deliveries' && method === 'GET') {
+    if (segment === 'summary') return distributionSummary(query);
+    if (segment !== undefined) return fail(404, 'not found');
+    const lines = filteredDistributions(query);
+    return Array.isArray(lines) ? ok(page(lines)) : lines;
+  }
   if (target === 'warehouse-requests' && method === 'POST') return placeWarehouseOrder(body);
   if (target === 'district-dispatches' && method === 'POST') return districtDispatch(body);
   const found = state.orders.find((candidate) => candidate.id === target);
   if (!found) return fail(404, 'order not found');
-  if (method === 'GET' && segment === undefined) return ok(found);
+  if (method === 'GET' && segment === undefined) return ok(withShipment(found));
   if (method === 'GET' && segment === 'events') {
     return ok(state.events.filter((event) => event.order_id === found.id).reverse());
   }

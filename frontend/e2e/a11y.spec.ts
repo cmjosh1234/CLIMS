@@ -23,6 +23,15 @@ for (const route of routesToVisit()) {
   });
 }
 
+// The profile belongs to no workspace, so the navigation table does not list it.
+test('/profile has no serious accessibility violations', async ({ page }, testInfo) => {
+  await page.goto('/profile');
+  await expect(page.getByRole('heading', { level: 1, name: 'Your profile' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Personal details' })).toBeVisible();
+  await expect(page.locator('[data-slot="skeleton"]')).toHaveCount(0);
+  await expectNoSeriousA11yViolations(page, testInfo, 'profile');
+});
+
 test.describe('signed out', () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 

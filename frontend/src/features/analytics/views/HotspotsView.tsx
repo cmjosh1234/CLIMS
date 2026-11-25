@@ -214,7 +214,29 @@ export function HotspotsView({
           title="Districts"
           description="Every district's hotspots, with data bars to compare them."
         >
-          <div className="bg-card rounded-card overflow-hidden border">
+          <div
+            className="bg-card rounded-card overflow-hidden border"
+            // The page's CSV and Excel downloads carry every district, as counts.
+            data-export-table={JSON.stringify({
+              title: 'Hotspots by district',
+              columns: [
+                'District',
+                'Recorded',
+                'Active',
+                'With dispenser',
+                'On the map',
+                'Waiting on stock',
+              ],
+              rows: data.by_district.map((row) => [
+                row.name ?? 'Not recorded',
+                row.total,
+                row.active,
+                row.with_dispenser,
+                row.located,
+                row.open_requests,
+              ]),
+            })}
+          >
             <DataTable
               label="Hotspots by district"
               rows={data.by_district}

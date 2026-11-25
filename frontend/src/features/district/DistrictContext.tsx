@@ -70,7 +70,7 @@ export function DistrictContextProvider({ children }: { children: ReactNode }) {
 
   // The dashboards have their own report filters (period, district, type); lists and the map use this.
   const showSelector =
-    /^(\/moh\/(?:hotspot-map|orders(?:\/warehouse)?|reports)|\/warehouse(?:\/requests)?)$/.test(
+    /^(\/moh\/(?:hotspot-map|hotspots|orders(?:\/warehouse)?|distribution(?:\/warehouses)?|reports)|\/warehouse(?:\/requests)?)$/.test(
       pathname,
     );
 

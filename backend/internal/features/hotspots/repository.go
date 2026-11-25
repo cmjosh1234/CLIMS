@@ -162,6 +162,9 @@ type Filter struct {
 	DistrictID    *string
 	// NotificationStatus is none, or the status of the hotspot's open stockout notification.
 	NotificationStatus string
+	// Search matches the hotspot's name, village, subcounty or district, or its manager's name or
+	// phone, ignoring case.
+	Search string
 }
 
 // list returns visible hotspots, most recently updated first.
@@ -170,8 +173,11 @@ func (r *Repository) list(ctx context.Context, access scope, f Filter, limit, of
 		` WHERE `+visibleHotSpots+` AND ($5 = '' OR h.status = $5) AND ($6 = '' OR h.review_status = $6)
 			AND ($7::uuid IS NULL OR h.submitted_by_id = $7) AND ($8::uuid IS NULL OR h.district_id = $8)
 			AND ($9 = '' OR `+notificationStatus+` = $9)
+			AND ($12 = '' OR h.name ILIKE $12 OR h.village ILIKE $12 OR sc.name ILIKE $12 OR d.name ILIKE $12
+				OR cp.name ILIKE $12 OR cp.phone_number ILIKE $12)
 		ORDER BY h.updated_at DESC, h.id DESC LIMIT $10 OFFSET $11`,
-		visibleArgs(access, f.Status, f.ReviewStatus, f.SubmittedByID, f.DistrictID, f.NotificationStatus, limit, offset)...)
+		visibleArgs(access, f.Status, f.ReviewStatus, f.SubmittedByID, f.DistrictID, f.NotificationStatus, limit, offset,
+			orders.ContainsPattern(f.Search))...)
 	if err != nil {
 		return nil, err
 	}

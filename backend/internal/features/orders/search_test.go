@@ -9,8 +9,8 @@ func TestContainsPattern(t *testing.T) {
 		"50%_off": `%50\%\_off%`,
 		`a\b`:     `%a\\b%`,
 	} {
-		if got := containsPattern(search); got != want {
-			t.Errorf("containsPattern(%q) = %q, want %q", search, got, want)
+		if got := ContainsPattern(search); got != want {
+			t.Errorf("ContainsPattern(%q) = %q, want %q", search, got, want)
 		}
 	}
 }

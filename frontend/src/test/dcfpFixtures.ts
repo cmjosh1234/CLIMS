@@ -106,6 +106,8 @@ export function anOrder(overrides: Partial<Order> = {}): Order {
     hot_spot_id: null,
     created_at: '2026-11-21T08:00:00Z',
     updated_at: '2026-11-21T08:00:00Z',
+    dispatched_at: null,
+    received_at: null,
     ...overrides,
   };
 }

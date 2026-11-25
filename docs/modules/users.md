@@ -10,7 +10,8 @@ Source: `backend/internal/features/users/`.
 | `dto.go`        | Account input, admin creation, role assignment, status change, normalization  |
 | `repository.go` | Account SQL, identity lookup, paginated listing, transactional access changes |
 | `service.go`    | Shared bcrypt hashing and account creation                                    |
-| `middleware.go` | Active-account resolution and current-user retrieval                          |
+| `middleware.go` | Active-account resolution, current-user retrieval, the password-change gate   |
+| `account.go`    | Own profile and password changes, temporary passwords, password rules         |
 | `handler.go`    | Management requests, validation, pagination, and HTTP responses               |
 | `routes.go`     | User routes and required permission gates                                     |
 
@@ -18,15 +19,19 @@ Source: `backend/internal/features/users/`.
 
 All routes require JWT authentication and an active account.
 
-| Method | Route                       | Required permissions                   |
-| ------ | --------------------------- | -------------------------------------- |
-| GET    | `/api/v1/users`             | `users:read`                           |
-| GET    | `/api/v1/users/{id}`        | `users:read`                           |
-| POST   | `/api/v1/users`             | Both `users:create` and `roles:assign` |
-| PATCH  | `/api/v1/users/{id}/role`   | `roles:assign`                         |
-| PUT    | `/api/v1/users/{id}/roles`  | `roles:assign`                         |
-| PATCH  | `/api/v1/users/{id}/status` | `users:update`                         |
-| PATCH  | `/api/v1/users/{id}/store`  | `users:update`                         |
+| Method | Route                                  | Required permissions                   |
+| ------ | -------------------------------------- | -------------------------------------- |
+| GET    | `/api/v1/users`                        | `users:read`                           |
+| GET    | `/api/v1/users/{id}`                   | `users:read`                           |
+| POST   | `/api/v1/users`                        | Both `users:create` and `roles:assign` |
+| PATCH  | `/api/v1/users/{id}/role`              | `roles:assign`                         |
+| PUT    | `/api/v1/users/{id}/roles`             | `roles:assign`                         |
+| PATCH  | `/api/v1/users/{id}/status`            | `users:update`                         |
+| PATCH  | `/api/v1/users/{id}/store`             | `users:update`                         |
+| PUT    | `/api/v1/users/{id}/password`          | `users:update`                         |
+| GET    | `/api/v1/users/district`               | `users:district_read`                  |
+| POST   | `/api/v1/users/district`               | `users:district_create`                |
+| PUT    | `/api/v1/users/district/{id}/password` | `users:district_create`                |
 
 Listing defaults to `limit=50&offset=0`, allows limits from 1 to 100, and orders by user ID. Account responses include names, email, phone, status, and the complete `roles` array with each role’s permissions. The legacy `role` field contains the assigned role with the lowest UUID, or null when there are no assignments. `PasswordHash` has `json:"-"` and is never serialized.
 
@@ -52,7 +57,13 @@ Administrator creation accepts existing `organisation_unit_id` and `hot_spot_id`
 
 `UpdateUserAccess` updates role or account status inside a transaction. It takes a PostgreSQL transaction advisory lock before reading and updating the account, serializing account-access changes. A request that would disable or demote the last active account with the `admin` role returns 409. This guard applies to concurrent API requests; operators with direct database access must preserve the invariant themselves.
 
-Allowed status updates are `active` and `disabled`. Use `PUT /api/v1/users/{id}/roles` with up to 100 existing role UUIDs in `role_ids` to replace the full set. Duplicate IDs collapse into one assignment, and an empty array clears the set. The legacy `PATCH /api/v1/users/{id}/role` endpoint replaces the full set with one role. There is no user deletion endpoint. The current API also does not provide profile editing, password changes, or organization-scoped access.
+Allowed status updates are `active` and `disabled`. Use `PUT /api/v1/users/{id}/roles` with up to 100 existing role UUIDs in `role_ids` to replace the full set. Duplicate IDs collapse into one assignment, and an empty array clears the set. The legacy `PATCH /api/v1/users/{id}/role` endpoint replaces the full set with one role. There is no user deletion endpoint, and no organization-scoped access. People change their own name, email address, phone number and password through [auth](auth.md#your-own-profile-and-password).
+
+## Temporary passwords
+
+Someone who has forgotten their password gets a temporary one. `PUT /api/v1/users/{id}/password` (`users:update`) lets an administrator set it on any account; only an administrator may set one on an administrator's account (403), and nobody sets their own this way (422, use `POST /auth/password`). `PUT /api/v1/users/district/{id}/password` (`users:district_create`) lets a DCFP set it on a VHT, hotspot manager or delivery agent in their own district, the accounts `GET /users/district` lists; any other account is a 404. The body is `{ "password": "…" }` under the same rules as a chosen password (at least 8 characters with a number, at most 72 bytes).
+
+A temporary password signs the account out everywhere and sets `must_change_password`, so the person chooses their own at their next sign-in ([auth](auth.md#changing-a-password-someone-else-chose)). Accounts created with `POST /users` or `POST /users/district` start the same way, since someone else chose their password. Each reset is audited as `user.password_reset` with the number of sessions it ended; the password itself is never recorded. The web app offers "Set temporary password" in Users & access and on the DCFP's Field users page, filled with a random password that is easy to read out over the phone.
 
 ## Stores
 

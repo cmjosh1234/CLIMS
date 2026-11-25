@@ -132,7 +132,7 @@ describe('ProgrammeReportsPage', () => {
     expect(screen.queryByRole('button', { name: 'Correct' })).not.toBeInTheDocument();
   });
 
-  it('opens on the overview, with figures, charts and a PDF download', async () => {
+  it('opens on the overview, with figures, charts and PDF, CSV and Excel downloads', async () => {
     renderApp(<ProgrammeReportsPage workspace="moh" />, {
       route: '/moh',
       session: sessionWith(['reports:read']),
@@ -145,6 +145,8 @@ describe('ProgrammeReportsPage', () => {
     ).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Hotspots by region' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Download PDF' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Download CSV' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Export Excel' })).toBeEnabled();
   });
 
   it('shows active filters as chips, and removing one clears it from the address', async () => {

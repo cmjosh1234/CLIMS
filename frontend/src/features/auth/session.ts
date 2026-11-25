@@ -70,6 +70,15 @@ export const authUserSchema = z
     email: z.string().nullish().default(null),
     /** The store the account works at (a DCFP's district store); `null` when none is assigned. */
     store_id: z.string().nullish().default(null),
+    /**
+     * True while the account still has a password someone else chose (an administrator or DCFP
+     * created it, or set a temporary one). The API answers nothing but `GET /auth/me`,
+     * `POST /auth/password` and sign-out until it is changed; older APIs leave it out.
+     */
+    must_change_password: z
+      .boolean()
+      .nullish()
+      .transform((value) => value === true),
   })
   .transform(({ role, roles, permissions, roleNames, ...user }) => {
     // Without a primary role, the first role held names the user.

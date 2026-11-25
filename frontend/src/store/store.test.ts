@@ -18,6 +18,7 @@ const session: Session = {
     permissions: null,
     roleNames: ['admin'],
     store_id: null,
+    must_change_password: false,
   },
 };
 

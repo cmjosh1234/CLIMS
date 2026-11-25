@@ -208,12 +208,20 @@ func TestAuthRBACIntegration(t *testing.T) {
 		if res.StatusCode != want {
 			t.Fatalf("%s %s: got %d want %d: %s", method, path, res.StatusCode, want, payload)
 		}
-		if bytes.Contains(payload, []byte("password")) && want < 400 {
-			t.Fatal("response exposed a password field")
-		}
 		var result map[string]any
 		if err = json.Unmarshal(payload, &result); err != nil {
 			t.Fatal(err)
+		}
+		if want < 400 {
+			assertNoPasswordField(t, method+" "+path, result)
+			if bytes.Contains(payload, []byte("$2a$")) || bytes.Contains(payload, []byte("$2y$")) {
+				t.Fatalf("%s %s: response exposed a password hash", method, path)
+			}
+		}
+		// An account an administrator or DCFP creates must change its password at its first sign-in;
+		// testPasswordChange covers that. Elsewhere, signing in stands for having done so.
+		if method == "POST" && path == "/auth/login" && want == 200 {
+			clearPasswordChange(t, pool, result)
 		}
 		return result
 	}
@@ -353,6 +361,7 @@ func TestAuthRBACIntegration(t *testing.T) {
 	request("GET", "/auth/me", nil, userToken, 200)
 	testSessions(t, pool, request, login, adminToken, id, "newuser@example.test")
 	testLoginIdentifiers(t, request, adminToken, mohRole)
+	testPasswordChange(t, pool, request, adminToken, mohRole)
 	userToken = login("newuser@example.test", "test-password-123", 200)
 
 	// A role given users:update, users:create and roles:assign manages accounts, but only administrators

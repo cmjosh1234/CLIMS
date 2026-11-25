@@ -61,4 +61,31 @@ describe('ChartCard', () => {
       'Requests',
     );
   });
+
+  it("gives the page's downloads its exact figures, and offers them as CSV or Excel", async () => {
+    const user = userEvent.setup();
+    const { container } = render(card());
+    const data = JSON.parse(
+      container.querySelector('[data-visual]')?.getAttribute('data-export-table') ?? '',
+    ) as unknown;
+    expect(data).toEqual({
+      title: 'Requests',
+      columns: ['Month', 'Raised', 'Fulfilled'],
+      rows: [
+        ['Sep 2026', 3, 2],
+        ['Oct 2026', 4, null],
+      ],
+    });
+    await user.click(screen.getByRole('button', { name: 'More options for Requests' }));
+    expect(screen.getByRole('menuitem', { name: 'Download data (CSV)' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Download data (Excel)' })).toBeInTheDocument();
+  });
+
+  it('offers no figures to the page while loading or after a failed load', () => {
+    const loading = render(card({ isLoading: true }));
+    expect(loading.container.querySelector('[data-export-table]')).toBeNull();
+    loading.unmount();
+    const failed = render(card({ error: new Error('boom') }));
+    expect(failed.container.querySelector('[data-export-table]')).toBeNull();
+  });
 });

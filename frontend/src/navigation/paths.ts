@@ -20,3 +20,12 @@ export const ACTIVATED_PARAM = 'activated';
 
 /** Where a signed-in user lands when they have no specific destination. */
 export const HOME_PATH = '/moh';
+
+/**
+ * The signed-in person's own profile. It belongs to no workspace and has no
+ * sidebar entry; the account menu links to it.
+ */
+export const PROFILE_PATH = '/profile';
+
+/** Signed-in pages about the person's own account, which sit in no workspace's navigation. */
+export const ACCOUNT_PATHS: readonly string[] = [PROFILE_PATH];

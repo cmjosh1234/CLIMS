@@ -7,6 +7,7 @@ import { useRef, type ReactNode } from 'react';
 
 import { FilterTabs } from '@/components/FilterTabs';
 import { PageActions } from '@/components/PageActions';
+import { PageDataButtons } from '@/components/reports/PageDataButtons';
 import { PdfButton } from '@/components/reports/PdfButton';
 import { Button } from '@/components/ui/button';
 import { FilterBar } from '@/features/analytics/FilterBar';
@@ -291,6 +292,12 @@ function ReportView({ view, workspace, filters, storeId }: ReportViewProps) {
               Refresh
             </Button>
             <PdfButton
+              title={VIEW_LABELS[view]}
+              subtitle={VIEW_PURPOSE[view]}
+              targetRef={contentRef}
+            />
+            {/* No server export behind these views, so the files hold what the page shows. */}
+            <PageDataButtons
               title={VIEW_LABELS[view]}
               subtitle={VIEW_PURPOSE[view]}
               targetRef={contentRef}

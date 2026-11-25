@@ -341,7 +341,7 @@ func (r *Repository) listStockouts(ctx context.Context, access scope, f Stockout
 			AND ($10 = '' OR h.name ILIKE $10 OR h.village ILIKE $10 OR sc.name ILIKE $10 OR d.name ILIKE $10)
 		ORDER BY r.created_at DESC, r.id DESC LIMIT $8 OFFSET $9`,
 		access.allStores, access.storeID, access.hotSpotID, access.userID, f.HotSpotID, f.DistrictID, f.Statuses, limit, offset,
-		containsPattern(f.Search))
+		ContainsPattern(f.Search))
 	if err != nil {
 		return nil, err
 	}

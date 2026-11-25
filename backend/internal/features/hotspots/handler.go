@@ -5,7 +5,9 @@ import (
 	"log/slog"
 	"slices"
 	"strconv"
+	"strings"
 
+	"clims-backend/internal/features/orders"
 	"clims-backend/internal/features/users"
 	"clims-backend/internal/pkg/request"
 	"clims-backend/internal/pkg/response"
@@ -46,7 +48,10 @@ func (h *Handler) list(c fiber.Ctx) error {
 		return response.Error(c, 400, "limit must be between 1 and 100 and offset must be nonnegative", nil)
 	}
 	filter := Filter{Status: c.Query("status"), ReviewStatus: c.Query("review_status"),
-		NotificationStatus: c.Query("notification_status")}
+		NotificationStatus: c.Query("notification_status"), Search: strings.TrimSpace(c.Query("q"))}
+	if len(filter.Search) > orders.MaxSearch {
+		return response.Error(c, 400, "q must be at most 100 characters", nil)
+	}
 	if filter.NotificationStatus != "" && !slices.Contains(NotificationStatuses, filter.NotificationStatus) {
 		return response.Error(c, 400, "notification_status must be none, awaiting_supply, awaiting_acknowledgement or partly_received", nil)
 	}

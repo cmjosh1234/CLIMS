@@ -26,6 +26,8 @@ interface AppShellProps {
   notificationActions?: NotificationActions;
   /** The heading for an address that has no page in `workspaces`, e.g. one the person may not open. */
   fallbackTitle?: string;
+  /** The line under `fallbackTitle`, for a page outside `workspaces` such as the person's profile. */
+  fallbackDescription?: string;
   /** The routed page. */
   children: ReactNode;
 }
@@ -38,6 +40,7 @@ export function AppShell({
   notifications,
   notificationActions,
   fallbackTitle,
+  fallbackDescription,
   children,
 }: AppShellProps) {
   const pathname = usePathname();
@@ -71,7 +74,12 @@ export function AppShell({
           tabIndex={-1}
           className="bg-canvas min-w-0 outline-none"
         >
-          <PageHeading location={location} counts={counts} fallbackTitle={fallbackTitle} />
+          <PageHeading
+            location={location}
+            counts={counts}
+            fallbackTitle={fallbackTitle}
+            fallbackDescription={fallbackDescription}
+          />
           <div className="w-full flex-1 px-4 pt-3 pb-8">
             <ErrorBoundary resetKey={pathname}>
               <div className="gap-section flex w-full flex-col">{children}</div>

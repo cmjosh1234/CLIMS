@@ -26,6 +26,9 @@ import type { AppRole } from "./types";
 export interface SessionUser {
   id: string;
   name: string;
+  /** Kept apart for editing; sessions saved before they were kept have only `name`. */
+  firstName?: string;
+  lastName?: string;
   username: string;
   email: string;
   phone: string;
@@ -37,6 +40,13 @@ export interface SessionUser {
   organisationUnit?: ApiUser["organisation_unit"];
   subcounty?: ApiUser["subcounty"];
   store?: ApiUser["store"];
+  /**
+   * The account still has a password someone else chose (the DCFP or an administrator set it):
+   * the app asks for a new one before anything else, and the API refuses everything else until then.
+   */
+  mustChangePassword?: boolean;
+  /** When the person last chose their own password (ISO time); null or absent if not known. */
+  passwordChangedAt?: string | null;
   demo?: boolean;
 }
 
@@ -47,6 +57,8 @@ interface SessionCtx {
   signIn: (identifier: string, password: string) => Promise<void>;
   signInDemo: (role: AppRole) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Swaps in the account the server returned after a profile or password change, and saves it. */
+  replaceUser: (u: ApiUser) => Promise<void>;
 }
 
 // v3 adds the refresh token; v2 sessions held only a 15-minute access token and are dropped.
@@ -82,10 +94,10 @@ export function appRoleOf(u: ApiUser): AppRole | null {
   return null;
 }
 
-function toSessionUser(u: ApiUser, role: AppRole): SessionUser {
-  const name =
-    [u.first_name || u.firstname, u.last_name || u.lastname].filter(Boolean).join(" ").trim() ||
-    u.username;
+export function toSessionUser(u: ApiUser, role: AppRole): SessionUser {
+  const firstName = (u.first_name || u.firstname || "").trim();
+  const lastName = (u.last_name || u.lastname || "").trim();
+  const name = [firstName, lastName].filter(Boolean).join(" ") || u.username;
   return {
     id: u.id,
     hotspotId: u.hot_spot_id ?? null,
@@ -95,10 +107,14 @@ function toSessionUser(u: ApiUser, role: AppRole): SessionUser {
     subcounty: u.subcounty,
     store: u.store,
     name,
+    firstName,
+    lastName,
     username: u.username,
     email: u.email,
     phone: u.phone_number || "",
     role,
+    mustChangePassword: u.must_change_password === true,
+    passwordChangedAt: u.password_changed_at ?? null,
   };
 }
 
@@ -134,6 +150,14 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       },
       sessionEnded: () => {
         clearLocal();
+      },
+      // The API refused a request until the password is changed: ask for it now.
+      passwordChangeRequired: () => {
+        const u = userRef.current;
+        if (!u || u.demo || u.mustChangePassword) return;
+        const next = { ...u, mustChangePassword: true };
+        setUser(next);
+        write({ user: next, tokens: getTokens() });
       },
     });
   }, [write, clearLocal]);
@@ -204,6 +228,19 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     [persist],
   );
 
+  const replaceUser = useCallback(
+    async (u: ApiUser) => {
+      const current = userRef.current;
+      if (!current || current.demo || current.id !== u.id) return;
+      // The role decides the tabs; keep the one signed in with if the reply names none this app serves.
+      const next = toSessionUser(u, appRoleOf(u) ?? current.role);
+      // The tokens stay as they are (setTokens would drop a refresh in flight); only the user changes.
+      setUser(next);
+      await write({ user: next, tokens: getTokens() });
+    },
+    [write],
+  );
+
   const signOut = useCallback(async () => {
     const t = getTokens();
     // Ending the session below stops this phone's pushes, but only once it reaches the server, so the
@@ -216,8 +253,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, [clearLocal]);
 
   const value = useMemo(
-    () => ({ user, restoring, signIn, signInDemo, signOut }),
-    [user, restoring, signIn, signInDemo, signOut],
+    () => ({ user, restoring, signIn, signInDemo, signOut, replaceUser }),
+    [user, restoring, signIn, signInDemo, signOut, replaceUser],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

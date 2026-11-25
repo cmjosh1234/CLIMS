@@ -1,4 +1,4 @@
-import { Ban, CircleCheck, MonitorSmartphone, ShieldCheck } from 'lucide-react';
+import { Ban, CircleCheck, KeyRound, MonitorSmartphone, ShieldCheck } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { DetailList } from '@/components/DetailList';
@@ -40,6 +40,8 @@ interface UserProfileSheetProps {
   onEditRoles: () => void;
   onShowDevices: () => void;
   onChangeStore: () => void;
+  /** Gives them a temporary password; offered to whoever may update accounts, for others. */
+  onSetPassword: () => void;
   onDeactivate: () => void;
   onReactivate: () => void;
 }
@@ -69,6 +71,7 @@ export function UserProfileSheet({
   onEditRoles,
   onShowDevices,
   onChangeStore,
+  onSetPassword,
   onDeactivate,
   onReactivate,
 }: UserProfileSheetProps) {
@@ -227,6 +230,12 @@ export function UserProfileSheet({
             <MonitorSmartphone data-icon="inline-start" aria-hidden="true" />
             Devices
           </Button>
+          {canUpdate && !isSelf ? (
+            <Button variant="outline" onClick={onSetPassword}>
+              <KeyRound data-icon="inline-start" aria-hidden="true" />
+              Temporary password
+            </Button>
+          ) : null}
           {canUpdate && !isSelf ? (
             isActive(user) ? (
               <Button variant="destructive" className="sm:ml-auto" onClick={onDeactivate}>

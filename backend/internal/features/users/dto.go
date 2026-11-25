@@ -20,6 +20,9 @@ type AccountInput struct {
 	StoreID *string `json:"-"`
 	// SubcountyID is where a field worker works; set by POST /users/district (DistrictUserRequest).
 	SubcountyID *string `json:"-"`
+	// MustChangePassword makes the person replace the password at their first sign-in. Set when
+	// someone else creates the account (POST /users, POST /users/district), never on self sign-up.
+	MustChangePassword bool `json:"-"`
 }
 
 type FacilityAssignment struct {

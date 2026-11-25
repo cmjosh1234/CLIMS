@@ -123,16 +123,15 @@ changes are confined to `lib/api/http.ts` and each feature's `api.ts`.
 
 ## Sample data
 
-Several screens were designed before their endpoints existed: the dashboards' stock and order
-figures, the charts, orders, distribution, procurement, supplier status and evidence upload. They
-are kept so the design is not lost, and they are honest about it:
+A few screens were designed before their endpoints existed, such as supplier status and evidence
+upload. They are kept so the design is not lost, and they are honest about it:
 
-- Every illustrative figure comes from `src/features/dashboards/sampleData.ts` and is marked
-  **Sample** on screen.
+- An illustrative figure is marked **Sample** on screen (`SampleBadge`, or `SampleDataNotice`
+  for a whole page).
 - Lists with no endpoint show an empty state, never invented rows.
 - Evidence upload is visibly switched off, because there is nowhere to send a file.
 
-When an endpoint exists, delete the sample entry and read the value through a query.
+When an endpoint exists, read the value through a query and drop the sample marking.
 
 ## Security notes
 

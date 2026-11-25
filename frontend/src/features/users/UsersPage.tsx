@@ -5,6 +5,7 @@ import {
   Ban,
   CircleCheck,
   History,
+  KeyRound,
   MonitorSmartphone,
   Plus,
   ShieldCheck,
@@ -32,6 +33,7 @@ import { PageActions } from '@/components/PageActions';
 import { StatCard, StatCardGrid } from '@/components/StatCard';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Button } from '@/components/ui/button';
+import { TemporaryPasswordDialog } from '@/features/account/TemporaryPasswordDialog';
 import { auditHref } from '@/features/audit/links';
 import { useCurrentUser } from '@/features/auth/hooks';
 import { useCan } from '@/features/auth/queries';
@@ -93,6 +95,7 @@ type Dialog =
   | { kind: 'roles'; user: User }
   | { kind: 'store'; user: User }
   | { kind: 'sessions'; user: User }
+  | { kind: 'password'; user: User }
   | null;
 
 /** "Today", "3 weeks ago" or "Never", with the exact time on hover. */
@@ -430,6 +433,18 @@ export default function UsersPage() {
                     setDialog({ kind: 'sessions', user });
                   },
                 },
+                // Your own password is changed from your profile, with your current one.
+                ...(canUpdate && !isSelf
+                  ? ([
+                      {
+                        label: 'Set temporary password',
+                        icon: KeyRound,
+                        onSelect: () => {
+                          setDialog({ kind: 'password', user });
+                        },
+                      },
+                    ] satisfies RowActionItem[])
+                  : []),
                 ...(canReadAudit
                   ? ([
                       {
@@ -500,6 +515,10 @@ export default function UsersPage() {
             setProfileId(null);
             setDialog({ kind: 'store', user: profileUser });
           }}
+          onSetPassword={() => {
+            setProfileId(null);
+            setDialog({ kind: 'password', user: profileUser });
+          }}
           onDeactivate={() => {
             setProfileId(null);
             setUserToDeactivate(profileUser);
@@ -538,6 +557,20 @@ export default function UsersPage() {
         <EditStoreDialog
           key={dialog.user.id}
           user={dialog.user}
+          onClose={() => {
+            setDialog(null);
+          }}
+          onCloseAutoFocus={(event) => {
+            focusRowActions(dialog.user.id, event);
+          }}
+        />
+      ) : null}
+      {dialog?.kind === 'password' ? (
+        <TemporaryPasswordDialog
+          key={dialog.user.id}
+          userId={dialog.user.id}
+          userName={userDisplayName(dialog.user)}
+          scope="admin"
           onClose={() => {
             setDialog(null);
           }}

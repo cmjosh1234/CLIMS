@@ -57,6 +57,8 @@ help:
 	@echo "    make setup           - Create the local environment file if missing"
 	@echo "    make db-up           - Start PostgreSQL only"
 	@echo "    make db-seed         - Import legacy data into an empty migrated database"
+	@echo "    make db-demo         - Add a simulated year of stock activity for the reports (dev)"
+	@echo "    make db-demo-remove  - Remove that demo activity again"
 	@echo "    make sql-convert     - Regenerate PostgreSQL SQL from the MySQL dump"
 	@echo "    make migrate-create NAME=description - Generate the next SQL up/down pair"
 	@echo ""
@@ -123,7 +125,7 @@ clean:
 test:
 	@echo "Running backend tests..."
 	cd backend && go test -v ./...
-.PHONY: setup db-up db-seed sql-convert
+.PHONY: setup db-up db-seed db-demo db-demo-remove sql-convert
 setup:
 	@test -f $(ENV_FILE) || cp infra/env/$(ENVIRONMENT).env.example $(ENV_FILE)
 	@echo "Environment ready: $(ENV_FILE)"
@@ -135,6 +137,17 @@ db-seed:
 	@seed_file=$$(mktemp) && trap 'rm -f "$$seed_file"' EXIT && \
 		$(PYTHON) scripts/prepare_legacy_seed.py > "$$seed_file" && \
 		$(COMPOSE) exec -T postgres sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -v ON_ERROR_STOP=1' < "$$seed_file"
+
+# Demo activity for the reports and analytics screens; every row it adds has an id starting de300000-.
+DEMO_SEED ?= 2026
+db-demo:
+	@refs=$$(mktemp) && demo=$$(mktemp) && trap 'rm -f "$$refs" "$$demo"' EXIT && \
+		$(COMPOSE) exec -T postgres sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -At -v ON_ERROR_STOP=1' < scripts/demo_activity_refs.sql > "$$refs" && \
+		$(PYTHON) scripts/demo_activity.py --seed $(DEMO_SEED) "$$refs" > "$$demo" && \
+		$(COMPOSE) exec -T postgres sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -q -v ON_ERROR_STOP=1' < "$$demo"
+
+db-demo-remove:
+	$(COMPOSE) exec -T postgres sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB" -q -v ON_ERROR_STOP=1' < scripts/demo_activity_remove.sql
 
 sql-convert:
 	$(PYTHON) scripts/convert_mysql_dump.py
