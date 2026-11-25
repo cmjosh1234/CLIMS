@@ -25,7 +25,6 @@ import { NotificationsView } from '@/features/analytics/views/NotificationsView'
 import { OverviewView } from '@/features/analytics/views/OverviewView';
 import { StockView } from '@/features/analytics/views/StockView';
 import { SupplyView } from '@/features/analytics/views/SupplyView';
-import { useCan } from '@/features/auth/queries';
 import { MohWatchList } from '@/features/moh/MohWatchList';
 import { useCurrentWarehouse } from '@/features/warehouse/orderQueries';
 import { StoreSwitch } from '@/features/warehouse/StoreSwitch';
@@ -34,10 +33,9 @@ import { queryString, type ReportKind, type ReportTable } from './api';
 import { printCell } from './files';
 import { useReportTable } from './queries';
 import { DownloadButtons, ReportMeta, ReportTableView } from './ReportTableView';
-import { ApproveVersionButton, VersionsView } from './VersionsView';
 
 export type ReportsWorkspace = 'moh' | 'dcfp' | 'warehouse';
-type View = 'overview' | ReportKind | 'hotspots' | 'versions';
+type View = 'overview' | ReportKind | 'hotspots';
 
 /** The reports each workspace works with. */
 const VIEWS: Record<ReportsWorkspace, readonly View[]> = {
@@ -50,7 +48,6 @@ const VIEWS: Record<ReportsWorkspace, readonly View[]> = {
     'expiry-exceptions',
     'hotspots',
     'hmis-105',
-    'versions',
   ],
   dcfp: [
     'overview',
@@ -61,16 +58,8 @@ const VIEWS: Record<ReportsWorkspace, readonly View[]> = {
     'expiry-exceptions',
     'hotspots',
     'hmis-105',
-    'versions',
   ],
-  warehouse: [
-    'overview',
-    'warehouse-requests',
-    'stock',
-    'batches',
-    'expiry-exceptions',
-    'versions',
-  ],
+  warehouse: ['overview', 'warehouse-requests', 'stock', 'batches', 'expiry-exceptions'],
 };
 
 const VIEW_LABELS: Record<View, string> = {
@@ -82,11 +71,10 @@ const VIEW_LABELS: Record<View, string> = {
   'expiry-exceptions': 'Expiry exceptions',
   hotspots: 'Hotspot coverage',
   'hmis-105': 'HMIS 105',
-  versions: 'Approved versions',
 };
 
 /** What each report is, for the PDF's subtitle. */
-const VIEW_PURPOSE: Record<Exclude<View, 'versions'>, string> = {
+const VIEW_PURPOSE: Record<View, string> = {
   overview: 'The programme at a glance: requests, orders, stock, expiry and hotspots.',
   notifications:
     'Hotspot stockout requests and how completely and quickly districts supplied them.',
@@ -99,7 +87,7 @@ const VIEW_PURPOSE: Record<Exclude<View, 'versions'>, string> = {
 };
 
 /** The filters each report reads; district is left to the server for district accounts. */
-function fieldsFor(view: Exclude<View, 'versions'>, workspace: ReportsWorkspace): FilterField[] {
+function fieldsFor(view: View, workspace: ReportsWorkspace): FilterField[] {
   const district: FilterField[] = workspace === 'dcfp' ? [] : ['district'];
   switch (view) {
     case 'overview':
@@ -182,12 +170,7 @@ export default function ProgrammeReportsPage({ workspace }: { workspace: Reports
           />
         ) : null}
       </div>
-      {view === 'versions' ? (
-        <VersionsView
-          selected={searchParams.get('version')}
-          hrefFor={(id) => `${base}${queryString({ view: 'versions', version: id ?? '' })}`}
-        />
-      ) : workspace === 'warehouse' && !storeId ? null : (
+      {workspace === 'warehouse' && !storeId ? null : (
         <ReportView
           key={view}
           view={view}
@@ -201,14 +184,13 @@ export default function ProgrammeReportsPage({ workspace }: { workspace: Reports
 }
 
 interface ReportViewProps {
-  view: Exclude<View, 'versions'>;
+  view: View;
   workspace: ReportsWorkspace;
   filters: ReportFilters;
   storeId: string | undefined;
 }
 
 function ReportView({ view, workspace, filters, storeId }: ReportViewProps) {
-  const can = useCan();
   const queryClient = useQueryClient();
   const contentRef = useRef<HTMLDivElement>(null);
   const exportKeys = EXPORT_PARAMS[view];
@@ -275,7 +257,6 @@ function ReportView({ view, workspace, filters, storeId }: ReportViewProps) {
           title={VIEW_LABELS[view]}
           purpose={VIEW_PURPOSE[view]}
           contentRef={contentRef}
-          canApprove={can('reports:approve')}
           onRefresh={refresh}
           fetching={fetching}
         >
@@ -333,20 +314,18 @@ interface ExportedReportProps {
   title: string;
   purpose: string;
   contentRef: React.RefObject<HTMLDivElement | null>;
-  canApprove: boolean;
   onRefresh: () => void;
   fetching: boolean;
   children: ReactNode;
 }
 
-/** A report with a server export: the visuals, then the export's table, with CSV, Excel, PDF and approval. */
+/** A report with a server export: the visuals, then the export's table, with CSV, Excel and PDF. */
 function ExportedReport({
   report,
   filters,
   title,
   purpose,
   contentRef,
-  canApprove,
   onRefresh,
   fetching,
   children,
@@ -380,9 +359,6 @@ function ExportedReport({
           table={table.data}
           csvPath={`/reports/export/${report}${queryString(filters, { format: 'csv' })}`}
         />
-        {canApprove ? (
-          <ApproveVersionButton report={report} filters={filters} table={table.data} />
-        ) : null}
       </PageActions>
       <div ref={contentRef} className="gap-section flex flex-col">
         {children}

@@ -76,6 +76,12 @@ Notable changes to CLIMS. The format follows [Keep a Changelog](https://keepacha
   signs them out everywhere and is replaced at their next sign-in: `PUT /api/v1/users/{id}/password`
   and `PUT /api/v1/users/district/{id}/password`. The sign-in page's hint now matches.
 
+### Removed
+
+- **Report approval.** Reports are live calculations, downloaded as they stand. Migration 43 drops the
+  approved report versions and the `reports:approve` permission (`/api/v1/reports/versions` and its
+  corrections are gone), and the Analytics page loses its Approved versions tab.
+
 ### Fixed
 
 - **Warehouse request report:** a request naming only a category, waiting for the warehouse to pick the

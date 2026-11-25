@@ -15,7 +15,7 @@ import (
 	"clims-backend/internal/features/users"
 )
 
-// exportLimit caps the rows one export or version holds.
+// exportLimit caps the rows one export holds.
 // shortcut: exports are built in memory; stream them if a report ever needs more rows than this.
 const exportLimit = 50000
 
@@ -32,7 +32,7 @@ type Column struct {
 	Header string `json:"header"`
 }
 
-// Table is a report exactly as exported and as saved in a version (RF15): the rows behind the screen,
+// Table is a report exactly as exported (RF15): the rows behind the screen,
 // with the period, data update time, scope, product, rule version and the definitions that apply.
 type Table struct {
 	Report        string            `json:"report"`
@@ -120,7 +120,7 @@ var exportDefinitions = map[string][]string{
 
 // build calculates a report for a user from its parameters: the summary shown on screen, where the
 // report has one, and the exported table. The table's filters pin the resolved period and targets, so
-// a version recalculated from them covers the same period.
+// the export says exactly which period it covers.
 func (h *Handler) build(ctx context.Context, user *users.User, report string, p params) (any, Table, error) {
 	columns, ok := exportColumns[report]
 	if !ok {
@@ -290,7 +290,7 @@ func (r *Repository) scopeLabel(ctx context.Context, s scope, district, store, h
 func writeCSV(w io.Writer, t Table) error {
 	out := csv.NewWriter(w)
 	header := [][]string{{"Report", t.Title}, {"Period", t.Period}}
-	// Versions saved before the date basis was recorded have none.
+	// Every report names its date basis; the check keeps a table without one readable.
 	if t.DateBasis != "" {
 		header = append(header, []string{"Date basis", t.DateBasis})
 	}

@@ -956,8 +956,6 @@ export function handleAnalytics(
         },
         history: [],
       });
-    case 'versions':
-      return ok([]);
     case 'export': {
       if (!sub) return fail(404, 'Not found');
       const table = exportTable(sub, query);

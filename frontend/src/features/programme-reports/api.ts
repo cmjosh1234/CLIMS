@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { parseBody, parseList, type HttpClient } from '@/lib/api';
+import { parseBody, type HttpClient } from '@/lib/api';
 
 /*
  * Programme reports from the Go API (`/api/v1/reports`, reporting requirements
@@ -105,27 +105,6 @@ export const hmisSummarySchema = z.object({
 });
 export type HmisSummary = z.infer<typeof hmisSummarySchema>;
 
-export const versionSchema = z.object({
-  id: z.string(),
-  report: z.enum(REPORT_KINDS),
-  title: z.string(),
-  period: z.string(),
-  scope: z.string(),
-  filters: z.record(z.string(), z.string()),
-  data_updated_at: z.string(),
-  approved_by: z.string().nullable(),
-  note: z.string().nullable(),
-  supersedes_id: z.string().nullable(),
-  correction_reason: z.string().nullable(),
-  superseded_by_id: z.string().nullable(),
-  status: z.enum(['approved', 'superseded']),
-  created_at: z.string(),
-});
-export type ReportVersion = z.infer<typeof versionSchema>;
-
-const versionDetailSchema = versionSchema.extend({ export: reportTableSchema });
-export type ReportVersionDetail = z.infer<typeof versionDetailSchema>;
-
 /** `?a=1&b=2` for the filters that are set, in a stable order so query keys and addresses match. */
 export function queryString(filters: ReportFilters, extra: ReportFilters = {}): string {
   const params = new URLSearchParams();
@@ -173,51 +152,9 @@ export async function getSummary<Kind extends SummaryKind>(
   return parseBody(schema, body, 'report summary') as z.infer<(typeof SUMMARIES)[Kind][1]>;
 }
 
-/** The server's CSV of a report (or of a saved version), as text with its byte order mark. */
+/** The server's CSV of a report, as text with its byte order mark. */
 export async function getCsv(http: HttpClient, path: string): Promise<string> {
   const body = await http.get(path);
   if (typeof body !== 'string') throw new Error('The server did not return a CSV file.');
   return body;
-}
-
-export async function listVersions(
-  http: HttpClient,
-  report: ReportKind | null,
-  signal?: AbortSignal,
-): Promise<ReportVersion[]> {
-  const body = await http.get(
-    `/reports/versions${queryString({ report: report ?? '', limit: '100' })}`,
-    {
-      signal,
-    },
-  );
-  return parseList(versionSchema, body, 'report versions');
-}
-
-export async function getVersion(
-  http: HttpClient,
-  id: string,
-  signal?: AbortSignal,
-): Promise<ReportVersionDetail> {
-  const body = await http.get(`/reports/versions/${encodeURIComponent(id)}`, { signal });
-  return parseBody(versionDetailSchema, body, 'report version');
-}
-
-export async function approveVersion(
-  http: HttpClient,
-  input: { report: ReportKind; filters: ReportFilters; note: string },
-): Promise<ReportVersionDetail> {
-  const body = await http.post('/reports/versions', input);
-  return parseBody(versionDetailSchema, body, 'report version');
-}
-
-export async function correctVersion(
-  http: HttpClient,
-  id: string,
-  reason: string,
-): Promise<ReportVersionDetail> {
-  const body = await http.post(`/reports/versions/${encodeURIComponent(id)}/corrections`, {
-    reason,
-  });
-  return parseBody(versionDetailSchema, body, 'report version');
 }

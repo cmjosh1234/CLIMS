@@ -40,10 +40,6 @@ func RegisterRoutes(router fiber.Router, repo *Repository, jwt, activeUser fiber
 	group.Get("/hotspot-status", h.hotspotStatus)
 	group.Get("/hotspot-status/records", h.hotspotStatusRecords)
 	group.Get("/export/:report", h.export)
-	group.Get("/versions", h.listVersions)
-	group.Post("/versions", rbac.RequirePermission("reports:approve"), h.createVersion)
-	group.Get("/versions/:id", h.getVersion)
-	group.Post("/versions/:id/corrections", rbac.RequirePermission("reports:approve"), h.correctVersion)
 }
 
 // settings returns the response settings in effect for a store (store_id) or nationally, with the
@@ -171,7 +167,7 @@ func (h *Handler) hmisFilter(p params) (time.Time, *string, error) {
 	return month, district, nil
 }
 
-// params are a report's query parameters, from the request or from a saved report version.
+// params are a report's query parameters.
 type params map[string]string
 
 func (p params) get(key string, fallback ...string) string {

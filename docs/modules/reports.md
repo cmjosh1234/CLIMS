@@ -21,10 +21,6 @@ The reports module serves the programme reports described in the reporting requi
 | GET    | `/api/v1/reports/trends`                     | `reports:read`      |
 | GET    | `/api/v1/reports/hotspots`                   | `reports:read`      |
 | GET    | `/api/v1/reports/export/{report}`            | `reports:read`      |
-| GET    | `/api/v1/reports/versions`                   | `reports:read`      |
-| POST   | `/api/v1/reports/versions`                   | `reports:approve`   |
-| GET    | `/api/v1/reports/versions/{id}`              | `reports:read`      |
-| POST   | `/api/v1/reports/versions/{id}/corrections`  | `reports:approve`   |
 
 ## Notification fulfilment
 
@@ -139,17 +135,13 @@ A user sets targets for their assigned store only (RN11); national settings and 
 
 `GET /api/v1/reports/export/{report}` returns a report's rows exactly as the screen shows them (RF15, RN02): `notifications`, `warehouse-requests`, `stock`, `batches`, `expiry-exceptions`, `hmis-105` or `hotspot-status`, with that report's own query parameters and access rules. Each export carries the period, [date basis](#filters-and-dates), data update time, scope, product, rule version and the definitions that apply, and the server defines the columns and their headers. `format=csv` downloads a CSV that starts with that information, then the headers and rows, with times in Kampala. Text that a spreadsheet could run as a formula is prefixed with an apostrophe. Without `format`, the JSON table is what the web screens show and turn into Excel. A blank cell means not applicable or not recorded, while 0 is a recorded zero. An export holds at most 50,000 rows; beyond that it asks for narrower filters.
 
-## Approved versions
+## No approval
 
-`POST /api/v1/reports/versions` approves a report as calculated now for its filters, saving the figures and rows unchanged with who approved them and an optional note (RF15, RN04). The saved filters pin the period, and for notifications the deadline and target, so a recalculation covers the same period. Stock, batches and hotspot statuses are current views, so a recalculation reads them as they are now.
-
-A correction (`POST /api/v1/reports/versions/{id}/corrections`, with a reason) recalculates from the saved filters and saves a new version that supersedes the old one. The old version keeps its figures, so it can still be reproduced. Only the latest version can be corrected, and a second correction of the same version is refused (409).
-
-National users (`orders:all_stores`) approve national versions and see every version. Others approve for their assigned store and see only its versions, and only a user with the same scope can correct a version. `GET /api/v1/reports/versions/{id}?format=csv` downloads a version's saved rows.
+Reports are not approved (decided 2026-11-25). Every report is a live calculation from the source records, downloaded as it stands with its period, date basis and data update time. Migration 43 removed the approved versions of migration 28, the `reports:approve` permission and any versions saved.
 
 ## Screens
 
-The web app's **Reports and analytics** page (`/moh/programme-reports`, `/dcfp/programme-reports` and `/warehouse/programme-reports`, "Analytics" in the sidebar) needs `reports:read`. Each report has its own tab: Overview, Stockout requests, Warehouse orders, Stock & coverage, Expiry risk, Expiry exceptions, Hotspot coverage and HMIS 105 (the warehouse workspace shows its own store's), then Approved versions. A tab shows the report's headline figures and charts (in the manner of Power BI: every chart can switch to a table, open in focus mode and download its data as CSV or itself as a picture), then the export table. Filters (period presets or dates, interval, region, district, warehouse, store type, condom type, status, expiry band, month) sit in one bar above everything they scope, live in the address, and show as removable chips; district accounts are limited to their district by the server, so they are not offered a district filter. Downloads: a PDF of the page (headline figures, charts in the light theme, the records, definitions and the filters it covers), the server's CSV, and Excel. Holders of `reports:approve` approve and correct versions. A failed load is shown as an error, never as zeros.
+The web app's **Reports and analytics** page (`/moh/programme-reports`, `/dcfp/programme-reports` and `/warehouse/programme-reports`, "Analytics" in the sidebar) needs `reports:read`. Each report has its own tab: Overview, Stockout requests, Warehouse orders, Stock & coverage, Expiry risk, Expiry exceptions, Hotspot coverage and HMIS 105 (the warehouse workspace shows its own store's). A tab shows the report's headline figures and charts (in the manner of Power BI: every chart can switch to a table, open in focus mode and download its data as CSV or itself as a picture), then the export table. Filters (period presets or dates, interval, region, district, warehouse, store type, condom type, status, expiry band, month) sit in one bar above everything they scope, live in the address, and show as removable chips; district accounts are limited to their district by the server, so they are not offered a district filter. Downloads: a PDF of the page (headline figures, charts in the light theme, the records, definitions and the filters it covers), the server's CSV, and Excel.A failed load is shown as an error, never as zeros.
 
 The MOH dashboard is built from the same reports (with a "Needs watching" list of overdue requests, unacknowledged deliveries, expiring and short stock and ledgers out of balance), and the DCFP and warehouse dashboards add a performance section with the same filters and PDF.
 
@@ -193,7 +185,7 @@ The server dates an action when it arrives, not when the phone saved it, so a pe
 
 Access is checked on the server for every request (RN01). `orders:all_stores` sees every notification, request and store, for national users. Warehouse request and stock reports show other users their assigned store only. For notifications, others see the notifications of their assigned district store, of their assigned hotspot, the ones they sent, and with `orders:stockout_district` the district they work in. Filters only narrow what the user can already see, so another district's data is never returned, including by asking for its hotspot.
 
-Migration 24 grants `reports:read`, migration 27 `reports:configure` and migration 28 `reports:approve` to `admin`; migration 38 grants `reports:read` to the DCFP role. Migration 39 makes `moh` the national, read-only overseer: it grants every read permission (`audit:read`, `hotspots:read`, `hotspots:read_district`, `hotspots:all_districts`, `inventory:read`, `orders:read`, `orders:all_stores`, `reports:read`, `roles:read`, `users:read`) and removes its one write permission, `catalogue:manage`; and it grants `reports:read` to `nms` and `jms`, which see their own store's reports. These are defaults an administrator can still change through `PUT /api/v1/roles/{id}/permissions`; the web app opens every workspace read-only for the `moh` role.
+Migration 24 grants `reports:read`, migration 27 `reports:configure` to `admin` (migration 28's `reports:approve` was removed in migration 43); migration 38 grants `reports:read` to the DCFP role. Migration 39 makes `moh` the national, read-only overseer: it grants every read permission (`audit:read`, `hotspots:read`, `hotspots:read_district`, `hotspots:all_districts`, `inventory:read`, `orders:read`, `orders:all_stores`, `reports:read`, `roles:read`, `users:read`) and removes its one write permission, `catalogue:manage`; and it grants `reports:read` to `nms` and `jms`, which see their own store's reports. These are defaults an administrator can still change through `PUT /api/v1/roles/{id}/permissions`; the web app opens every workspace read-only for the `moh` role.
 
 ## Not covered yet
 
