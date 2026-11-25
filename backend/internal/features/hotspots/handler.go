@@ -70,6 +70,11 @@ func (h *Handler) list(c fiber.Ctx) error {
 			*target = &id
 		}
 	}
+	near, err := parseNear(c.Query("near_lat"), c.Query("near_lng"), c.Query("radius_m"))
+	if err != nil {
+		return response.Error(c, 400, err.Error(), nil)
+	}
+	filter.Near = near
 	hotSpots, err := h.repo.list(c.Context(), scopeFor(users.CurrentUser(c)), filter, limit, offset)
 	if err != nil {
 		return hotSpotError(c, err)

@@ -293,6 +293,56 @@ func testHotSpotActivation(t *testing.T, pool *pgxpool.Pool,
 	if after := len(data(request("GET", path, nil, national, 200))["comments"].([]any)); after != before {
 		t.Fatalf("a national reader added a comment: %d comments, had %d", after, before)
 	}
+	// The near filter lists hotspots within a radius, nearest first, each with its distance. The first
+	// hotspot sits at 0.35, 32.5825, about 267 m north of the second.
+	nearby := func(token, query string) []map[string]any {
+		t.Helper()
+		items := []map[string]any{}
+		for _, item := range request("GET", "/hotspots?near_lat=0.3476&near_lng=32.5825"+query, nil, token, 200)["data"].([]any) {
+			items = append(items, item.(map[string]any))
+		}
+		return items
+	}
+	distanceTo := func(items []map[string]any, id string) float64 {
+		for _, item := range items {
+			if item["id"] == id {
+				return item["distance_m"].(float64)
+			}
+		}
+		return -1
+	}
+	within := nearby(dcfp, "&radius_m=1000&limit=100")
+	if d := distanceTo(within, id); d < 260 || d > 275 {
+		t.Fatalf("near filter: first hotspot at %v m, want about 267", d)
+	}
+	if d := distanceTo(within, second); d < 0 || d > 1 {
+		t.Fatalf("near filter: second hotspot at %v m, want 0", d)
+	}
+	for i := 1; i < len(within); i++ {
+		if within[i-1]["distance_m"].(float64) > within[i]["distance_m"].(float64) {
+			t.Fatal("near filter: not nearest first")
+		}
+	}
+	for _, item := range within {
+		if item["distance_m"].(float64) > 1000 {
+			t.Fatalf("near filter: %v is beyond the radius", item)
+		}
+	}
+	if close := nearby(dcfp, "&radius_m=100"); distanceTo(close, id) >= 0 || distanceTo(close, second) < 0 {
+		t.Fatal("near filter: radius_m does not cut off")
+	}
+	if distanceTo(nearby(dcfp, "&radius_m=1000&review_status=submitted"), id) >= 0 {
+		t.Fatal("near filter: does not combine with review_status")
+	}
+	if distanceTo(nearby(otherDCFP, "&radius_m=1000&limit=100"), id) >= 0 {
+		t.Fatal("near filter: widened a DCFP's view to another district")
+	}
+	if _, ok := request("GET", "/hotspots?limit=1", nil, dcfp, 200)["data"].([]any)[0].(map[string]any)["distance_m"]; ok {
+		t.Fatal("distance_m appears without the near filter")
+	}
+	request("GET", "/hotspots?near_lat=0.3476&near_lng=32.5825", nil, dcfp, 400)
+	request("GET", "/hotspots?near_lat=0.3476&near_lng=32.5825&radius_m=5001", nil, dcfp, 400)
+	request("GET", "/hotspots?near_lat=95&near_lng=32.5825&radius_m=100", nil, dcfp, 400)
 	request("GET", "/hotspots?review_status=verified", nil, dcfp, 400)
 	request("GET", "/hotspots?district_id=kampala", nil, national, 400)
 
